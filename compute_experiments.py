@@ -12,6 +12,9 @@ prime gap sequence g_n = p_{n+1} - p_n:
   Experiment 3: Lempel-Ziv complexity / compressibility
   Experiment 4: Goodness-of-fit to exponential / Poisson model
   Experiment 5: Conditional entropy by residue class
+  Experiment 6: Cramer model MI (theoretical prediction)
+  Experiment 7: Permutation tests for MI significance
+  Experiment 8: LZ-based entropy rate estimator and H_1 scaling
 
 All results saved as CSV files in data/ for analysis and figure generation.
 """
@@ -593,6 +596,296 @@ with open(csv_path, 'w', newline='') as f:
         'scale', 'residue_class', 'k', 'H_k', 'n_gaps', 'pct_of_total'])
     writer.writeheader()
     for row in cond_entropy_rows:
+        writer.writerow({k: (f"{v:.6f}" if isinstance(v, float) else v)
+                         for k, v in row.items()})
+print(f"  Saved: {csv_path}")
+print(f"  Time: {time.time() - t_exp:.1f}s")
+
+
+# ============================================================================
+# EXPERIMENT 6: Cramer Model MI (Theoretical Prediction)
+# ============================================================================
+
+banner("EXPERIMENT 6: Cramer Model MI — Theoretical vs Empirical")
+t_exp = time.time()
+
+cramer_rows = []
+
+for scale in SCALES:
+    primes, gaps = prime_data[scale]
+    gaps_list = gaps.tolist()
+    n_gaps = len(gaps_list)
+    mean_gap = float(gaps.mean())
+    L = log(float(np.median(primes)))  # log(x)
+
+    # --- Cramer model: geometric gaps with parameter p = 1/L ---
+    # In the Cramer model, each integer after a prime is independently prime
+    # with probability ~1/log(x). For even gaps among odd numbers, g/2 ~ Geom(2/L).
+    # Consecutive gaps are INDEPENDENT (memoryless property), so MI_Cramer = 0.
+    MI_cramer = 0.0
+
+    # --- Hardy-Littlewood model: compute predicted MI from singular series ---
+    # Under H-L, P(gap = 2k) ~ S({0,2k}) * (1/L) * exp(-2k/L)
+    # where S({0,h}) = 2*C2 * prod_{p|h, p>2} (p-1)/(p-2)
+    # The joint P(g_n=2j, g_{n+1}=2k) involves the 3-tuple singular series
+    # S({0, 2j, 2j+2k}).
+    #
+    # Compute the singular series S({0,h}) for the marginal distribution
+    def singular_series_pair(h):
+        """S({0,h}) = 2 * C2 * prod_{p|h, p>2} (p-1)/(p-2), but we compute
+        the relative weight S({0,h})/S({0,2}) since C2 cancels in the ratio."""
+        if h <= 0 or h % 2 != 0:
+            return 0.0
+        product = 1.0
+        # Factor out the contribution from odd prime divisors of h
+        n = h
+        for p in [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]:
+            if p * p > n:
+                break
+            if n % p == 0:
+                product *= (p - 1) / (p - 2)
+                while n % p == 0:
+                    n //= p
+        if n > 2:  # remaining prime factor
+            product *= (n - 1) / (n - 2)
+        return product
+
+    def singular_series_triple(h1, h2):
+        """Relative weight for S({0, h1, h2}) / S({0,2})^2.
+        S({0,h1,h2}) = product over primes p of (1 - nu_p/p)/(1-1/p)^3
+        where nu_p = number of distinct residues of {0,h1,h2} mod p.
+        We compute the relative factor vs the pair case."""
+        if h1 <= 0 or h2 <= 0 or h1 % 2 != 0 or h2 % 2 != 0 or h1 == h2:
+            return 0.0
+        product = 1.0
+        for p in [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]:
+            # Count distinct residues of {0, h1, h2} mod p
+            residues = len(set([0 % p, h1 % p, h2 % p]))
+            # For the 3-tuple: factor is (1 - residues/p) / (1 - 1/p)^3
+            # For the reference (independent pairs): (1 - 2/p)^2 / (1 - 1/p)^4
+            # Ratio: (1 - residues/p)(1-1/p) / (1-2/p)^2
+            num = (1.0 - residues / p) * (1.0 - 1.0 / p)
+            den = (1.0 - 2.0 / p) ** 2
+            if den > 0:
+                product *= num / den
+        return product
+
+    # Build the H-L marginal distribution P(g=2k) ~ S_pair(2k) * exp(-2k/L)
+    max_gap_val = int(min(8 * L, 300))  # truncate at ~8 mean gaps
+    gap_values = list(range(2, max_gap_val + 1, 2))
+
+    marginal_weights = {}
+    for g in gap_values:
+        w = singular_series_pair(g) * np.exp(-g / L)
+        marginal_weights[g] = w
+    Z_marginal = sum(marginal_weights.values())
+    marginal_probs = {g: w / Z_marginal for g, w in marginal_weights.items()}
+
+    # H-L marginal entropy
+    H_hl_marginal = -sum(p * log2(p) for p in marginal_probs.values() if p > 0)
+
+    # Build joint distribution P(g1=2j, g2=2k) ~ S_triple(2j, 2j+2k) * exp(-(2j+2k)/L)
+    joint_weights = {}
+    for g1 in gap_values:
+        for g2 in gap_values:
+            w = singular_series_triple(g1, g1 + g2) * np.exp(-(g1 + g2) / L)
+            if w > 0:
+                joint_weights[(g1, g2)] = w
+    Z_joint = sum(joint_weights.values())
+
+    if Z_joint > 0:
+        joint_probs = {k: w / Z_joint for k, w in joint_weights.items()}
+        H_hl_joint = -sum(p * log2(p) for p in joint_probs.values() if p > 0)
+        MI_hl = 2 * H_hl_marginal - H_hl_joint
+    else:
+        MI_hl = 0.0
+
+    # Empirical MI at lag 1 (from Experiment 2)
+    mi_lag1_row = [r for r in mi_rows if r['scale'] == scale and r['lag'] == 1][0]
+    MI_empirical = mi_lag1_row['MI_corrected']
+
+    # Sieve contribution = empirical MI - Cramer MI
+    MI_sieve = MI_empirical - MI_cramer
+
+    cramer_rows.append({
+        'scale': scale,
+        'log_x': L,
+        'MI_cramer': MI_cramer,
+        'MI_hardy_littlewood': MI_hl,
+        'MI_empirical': MI_empirical,
+        'MI_sieve_contribution': MI_sieve,
+        'H1_empirical': [r for r in block_entropy_rows
+                         if r['scale'] == scale and r['k'] == 1][0]['H_k'],
+        'H1_predicted': log2(L),  # log2(log(x))
+    })
+
+    print(f"  Scale {scale:.0e}: MI_Cramer = {MI_cramer:.6f}, "
+          f"MI_H-L = {MI_hl:.6f}, MI_empirical = {MI_empirical:.6f}, "
+          f"sieve contribution = {MI_sieve:.6f} bits")
+    print(f"    H_1 empirical = {cramer_rows[-1]['H1_empirical']:.4f}, "
+          f"H_1 predicted log2(log x) = {cramer_rows[-1]['H1_predicted']:.4f}")
+
+csv_path = output_dir / 'cramer_model.csv'
+with open(csv_path, 'w', newline='') as f:
+    writer = csv.DictWriter(f, fieldnames=[
+        'scale', 'log_x', 'MI_cramer', 'MI_hardy_littlewood', 'MI_empirical',
+        'MI_sieve_contribution', 'H1_empirical', 'H1_predicted'])
+    writer.writeheader()
+    for row in cramer_rows:
+        writer.writerow({k: (f"{v:.6f}" if isinstance(v, float) else v)
+                         for k, v in row.items()})
+print(f"  Saved: {csv_path}")
+print(f"  Time: {time.time() - t_exp:.1f}s")
+
+
+# ============================================================================
+# EXPERIMENT 7: Permutation Tests for MI Significance
+# ============================================================================
+
+banner("EXPERIMENT 7: Permutation Tests for MI Significance")
+t_exp = time.time()
+
+N_PERMUTATIONS = 200
+perm_rows = []
+rng_perm = np.random.default_rng(123)
+
+# Test at selected lags across all scales
+test_lags = [1, 2, 3, 5, 10, 20, 50, 100]
+
+for scale in SCALES:
+    primes, gaps = prime_data[scale]
+    gaps_list = gaps.tolist()
+    n_gaps = len(gaps_list)
+
+    for lag in test_lags:
+        n_pairs = n_gaps - lag
+
+        # Empirical MI (from Experiment 2)
+        mi_row = [r for r in mi_rows
+                   if r['scale'] == scale and r['lag'] == lag][0]
+        MI_obs = mi_row['MI_bits']  # raw MI (before correction)
+
+        # Null distribution: shuffle one sequence and compute MI
+        null_mi = []
+        for _ in range(N_PERMUTATIONS):
+            shuffled = gaps_list[:n_pairs].copy()
+            rng_perm.shuffle(shuffled)
+            joint_counts = Counter()
+            for i in range(n_pairs):
+                joint_counts[(shuffled[i], gaps_list[i + lag])] += 1
+            H_joint = shannon_entropy(joint_counts, n_pairs)
+
+            marginal_x_counts = Counter(shuffled)
+            marginal_y_counts = Counter(gaps_list[lag:lag + n_pairs])
+            H_x = shannon_entropy(marginal_x_counts, n_pairs)
+            H_y = shannon_entropy(marginal_y_counts, n_pairs)
+
+            null_mi.append(H_x + H_y - H_joint)
+
+        null_mean = float(np.mean(null_mi))
+        null_std = float(np.std(null_mi))
+        z_score = (MI_obs - null_mean) / null_std if null_std > 0 else 0.0
+        p_value = float(np.mean([m >= MI_obs for m in null_mi]))
+        significant = MI_obs > np.percentile(null_mi, 99)
+
+        perm_rows.append({
+            'scale': scale,
+            'lag': lag,
+            'MI_observed': MI_obs,
+            'null_mean': null_mean,
+            'null_std': null_std,
+            'z_score': z_score,
+            'p_value_permutation': p_value,
+            'significant_99': int(significant),
+        })
+
+    sig_count = sum(1 for r in perm_rows[-len(test_lags):]
+                    if r['significant_99'])
+    print(f"  Scale {scale:.0e}: {sig_count}/{len(test_lags)} lags significant at 99%")
+
+csv_path = output_dir / 'permutation_tests.csv'
+with open(csv_path, 'w', newline='') as f:
+    writer = csv.DictWriter(f, fieldnames=[
+        'scale', 'lag', 'MI_observed', 'null_mean', 'null_std',
+        'z_score', 'p_value_permutation', 'significant_99'])
+    writer.writeheader()
+    for row in perm_rows:
+        writer.writerow({k: (f"{v:.8f}" if isinstance(v, float) else v)
+                         for k, v in row.items()})
+print(f"  Saved: {csv_path}")
+print(f"  Time: {time.time() - t_exp:.1f}s")
+
+
+# ============================================================================
+# EXPERIMENT 8: LZ-Based Entropy Rate Estimator and H_1 Scaling
+# ============================================================================
+
+banner("EXPERIMENT 8: LZ Entropy Rate Estimator and H_1 Scaling")
+t_exp = time.time()
+
+lz_rate_rows = []
+
+for scale in SCALES:
+    primes, gaps = prime_data[scale]
+    gaps_list = gaps.tolist()
+    n = len(gaps_list)
+    alphabet_size = len(set(gaps_list))
+    L = log(float(np.median(primes)))
+
+    # LZ-based entropy rate: h_LZ = C(s) * log_alpha(n) / n
+    # where alpha = alphabet size, and C(s) is the LZ76 complexity
+    C = lz76_complexity(gaps_list)
+    if alphabet_size > 1:
+        h_lz = C * (log(n) / log(alphabet_size)) / n
+    else:
+        h_lz = 0.0
+
+    # Same for shuffled (gives h of the i.i.d. marginal)
+    C_shuffled_list = []
+    for _ in range(20):
+        s = gaps_list.copy()
+        rng.shuffle(s)
+        C_shuffled_list.append(lz76_complexity(s))
+    C_shuffled_mean = float(np.mean(C_shuffled_list))
+    if alphabet_size > 1:
+        h_lz_shuffled = C_shuffled_mean * (log(n) / log(alphabet_size)) / n
+    else:
+        h_lz_shuffled = 0.0
+
+    # Ratio of entropy rates
+    h_ratio = h_lz / h_lz_shuffled if h_lz_shuffled > 0 else 0.0
+
+    # H_1 scaling: empirical vs log2(log(x))
+    H1_emp = [r for r in block_entropy_rows
+              if r['scale'] == scale and r['k'] == 1][0]['H_k']
+    H1_pred = log2(L)
+    H1_residual = H1_emp - H1_pred
+
+    lz_rate_rows.append({
+        'scale': scale,
+        'log_x': L,
+        'C_gaps': C,
+        'h_lz_gaps': h_lz,
+        'h_lz_shuffled': h_lz_shuffled,
+        'h_ratio': h_ratio,
+        'H1_empirical': H1_emp,
+        'H1_log2logx': H1_pred,
+        'H1_residual': H1_residual,
+    })
+
+    print(f"  Scale {scale:.0e}: h_LZ(gaps) = {h_lz:.4f}, "
+          f"h_LZ(shuffled) = {h_lz_shuffled:.4f}, "
+          f"ratio = {h_ratio:.4f}")
+    print(f"    H_1 = {H1_emp:.4f}, log2(log x) = {H1_pred:.4f}, "
+          f"residual = {H1_residual:.4f}")
+
+csv_path = output_dir / 'lz_entropy_rate.csv'
+with open(csv_path, 'w', newline='') as f:
+    writer = csv.DictWriter(f, fieldnames=[
+        'scale', 'log_x', 'C_gaps', 'h_lz_gaps', 'h_lz_shuffled',
+        'h_ratio', 'H1_empirical', 'H1_log2logx', 'H1_residual'])
+    writer.writeheader()
+    for row in lz_rate_rows:
         writer.writerow({k: (f"{v:.6f}" if isinstance(v, float) else v)
                          for k, v in row.items()})
 print(f"  Saved: {csv_path}")
