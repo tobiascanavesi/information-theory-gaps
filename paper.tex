@@ -52,7 +52,7 @@ block entropy measurements with an explicit finite-sample ceiling analysis showi
 a Lempel--Ziv entropy rate estimator that avoids this curse of dimensionality, yielding $h_{\mathrm{LZ}}^{\mathrm{gaps}}/h_{\mathrm{LZ}}^{\mathrm{shuffled}} \approx 0.92$--$0.94$;
 goodness-of-fit tests confirming monotonic convergence toward the Gallagher--Poisson prediction with variance-to-mean ratio climbing from $0.72$ to $0.77$;
 and conditional entropy measurements revealing a ${\sim}0.06$-bit asymmetry between primes $\equiv 1$ and $\equiv 5 \pmod{6}$.
-We also verify that the empirical single-gap entropy satisfies $H_1 \approx \log_2(\log x) + C$ with $C \approx 0.44$,
+We also verify that the empirical single-gap entropy satisfies $H_1 \approx \log_2(\log x) + C$ with a slowly varying residual $C \approx 0.22$--$0.28$,
 consistent with a discretized exponential model weighted by the Hardy--Littlewood singular series.
 All code and data are publicly available.
 \end{abstract}
@@ -160,12 +160,13 @@ Mutual information arises because the joint~\eqref{eq:hl-joint} does not factor 
 
 \subsection{Quantitative prediction under Hardy--Littlewood}
 
-We can compute $\MI_{\text{H-L}}$ numerically by summing~\eqref{eq:hl-marginal} and~\eqref{eq:hl-joint} over all gap pairs $(h_1, h_2)$ up to $\sim 8 \log x$, computing the marginal and joint entropies, and taking their difference.
-For the triple singular series, we use the product formula
+We compute $\MI_{\text{H-L}}$ numerically by summing~\eqref{eq:hl-marginal} and~\eqref{eq:hl-joint} over all gap pairs $(h_1, h_2)$ up to $\sim 8 \log x$ (the result is insensitive to this cutoff due to the rapid decay of $e^{-(h_1+h_2)/\log x}$), computing the marginal and joint entropies, and taking their difference.
+For the triple singular series appearing in~\eqref{eq:hl-joint}, we use the product formula
 \[
-\fS(\{0, h_1, h_2\}) = \prod_{p} \frac{(1 - \nu_p / p)}{(1 - 1/p)^3},
+\fS(\{0, h_1, h_1 + h_2\}) = \prod_{p} \frac{(1 - \nu_p / p)}{(1 - 1/p)^3},
 \]
-where $\nu_p = |\{0, h_1, h_2\} \bmod p|$ counts distinct residues, with the product over all primes~$p$.
+where $\nu_p = |\{0, h_1, h_1 + h_2\} \bmod p|$ counts distinct residues.
+The product is taken over all primes $p$; since $\nu_p = 3$ for all $p > h_1 + h_2$ (the three elements are automatically distinct modulo large primes), only finitely many factors differ from the baseline, and the product converges rapidly.
 
 \begin{table}[ht]
 \centering
@@ -479,7 +480,7 @@ These provide independent quantifications of the \emph{rate} of convergence to t
 \subsection{Open directions}
 
 \begin{enumerate}
-\item \textbf{Compute $\MI$ under the Hardy--Littlewood model}: derive an asymptotic expression for $\MI(g_n; g_{n+1})$ using the triple singular series $\fS(\{0, h_1, h_1 + h_2\})$ and compare to the empirical $0.33$ bits. The discrepancy would quantify higher-order sieve effects.
+\item \textbf{Asymptotics of $\MI_{\text{H-L}}$}: our numerical computation (Table~\ref{tab:cramer-mi}) shows $\MI_{\text{H-L}} \approx 0.23$ bits, capturing $71\%$ of the empirical MI with remarkable scale-stability. Prove that $\MI_{\text{H-L}}(x) \to 0$ as $x \to \infty$ (as the Gallagher prediction requires) and determine the rate. Prove or disprove that the ratio $\MI_{\text{H-L}} / \MI_{\text{empirical}}$ has a limit as $x \to \infty$.
 
 \item \textbf{Prove $H_1 = \log_2(\log x) + C + o(1)$}: under the Hardy--Littlewood conjecture, derive the constant $C$ from the singular series weights and the discretization to even integers.
 
