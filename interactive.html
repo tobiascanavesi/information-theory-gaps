@@ -106,7 +106,7 @@
 
   .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
   .stat-box {
-    flex: 1; min-width: 140px;
+    flex: 1; min-width: 120px;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -166,6 +166,10 @@
   th { color: var(--accent); font-weight: 600; }
   td:first-child, th:first-child { text-align: left; }
 
+  .decomp-bar { display: flex; border-radius: 8px; overflow: hidden; height: 40px; margin: 16px 0; }
+  .decomp-bar > div { display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 700; color: var(--bg); }
+
   footer {
     text-align: center; padding: 40px 24px;
     color: var(--muted); font-size: 0.85rem;
@@ -186,7 +190,7 @@
   <h1>How Random Are Prime Gaps?</h1>
   <p class="subtitle">
     An information theory exploration of the spaces between prime numbers &mdash;
-    measuring what autocorrelation can't see
+    measuring what autocorrelation can't see, and tracing the signal to the sieve
   </p>
   <p class="author">Tobias Canavesi &middot; April 2026</p>
   <span class="badge">Interactive Research Guide</span>
@@ -196,8 +200,9 @@
   <div class="container">
     <a href="#intro">The Question</a>
     <a href="#explore">Explore Gaps</a>
+    <a href="#sieve">The Sieve Signal</a>
     <a href="#entropy">Entropy</a>
-    <a href="#mi">Hidden Dependence</a>
+    <a href="#memory">Memory Length</a>
     <a href="#compress">Compressibility</a>
     <a href="#poisson">Poisson Test</a>
     <a href="#residues">Residue Classes</a>
@@ -228,7 +233,7 @@
     <p>
       We used tools from <span class="highlight3">information theory</span> &mdash;
       the mathematics of communication invented by Claude Shannon &mdash;
-      to answer this question. What we found surprised us.
+      to answer this question. The answer has three layers, and the deepest one surprised us.
     </p>
 
     <div class="analogy">
@@ -282,6 +287,101 @@
 </section>
 
 <!-- ============================================================ -->
+<section id="sieve">
+  <div class="container">
+    <h2>The Sieve Signal: Our Main Result</h2>
+    <p class="section-subtitle">Where does the dependence between gaps come from? We can decompose it.</p>
+
+    <p>
+      The central question is: <em>how much do consecutive prime gaps "know" about each other?</em>
+      We measure this using <span class="highlight">mutual information</span> (MI) &mdash;
+      a quantity from information theory that captures <em>all</em> statistical dependence,
+      not just linear correlation.
+    </p>
+    <p>
+      The empirical answer: consecutive gaps share <span class="highlight2">0.33 bits</span> of mutual information.
+      But where does this dependence come from? We can decompose it into three layers:
+    </p>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="value" style="color: var(--muted);">0.00</div>
+        <div class="label">Cram&eacute;r model<br>(pure randomness)</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" style="color: var(--accent3);">0.23</div>
+        <div class="label">Hardy&ndash;Littlewood<br>(singular series)</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" style="color: var(--accent4);">0.33</div>
+        <div class="label">Empirical<br>(actual primes)</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" style="color: var(--gold);">71%</div>
+        <div class="label">H-L / Empirical<br>(stable across scales)</div>
+      </div>
+    </div>
+
+    <p style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">
+      Decomposition of lag-1 mutual information (scale 10<sup>8</sup>):
+    </p>
+    <div class="decomp-bar">
+      <div style="width: 71%; background: linear-gradient(90deg, var(--accent3), var(--accent));">
+        H-L singular series: 0.23 bits (71%)
+      </div>
+      <div style="width: 29%; background: var(--gold);">
+        Residual: 0.09 bits (29%)
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>The three models, explained</h3>
+      <p>
+        <strong style="color:var(--muted)">1. Cram&eacute;r's random model (1936):</strong>
+        Imagine each integer is "prime" independently with probability 1/log(x).
+        In this model, consecutive gaps are <em>completely independent</em> (MI = 0) &mdash;
+        this follows from the memoryless property of the geometric distribution.
+        So any MI we observe must come from the <em>non-random</em> structure of actual primes.
+      </p>
+      <p>
+        <strong style="color:var(--accent3)">2. Hardy&ndash;Littlewood model:</strong>
+        This refines Cram&eacute;r by accounting for the <em>sieve</em> &mdash; the fact that primes
+        avoid multiples of small primes. The "singular series" weights certain gap sizes
+        (like 6, which is divisible by 3) more than others (like 4, which isn't).
+        When two consecutive gaps share a prime, these weights create a coupling.
+        We computed this coupling exactly and it accounts for <span class="highlight3">71% of the observed MI</span>.
+      </p>
+      <p>
+        <strong style="color:var(--gold)">3. The remaining 29%:</strong>
+        The residual (~0.09 bits) represents higher-order effects beyond the
+        Hardy&ndash;Littlewood approximation. It decreases slowly with scale,
+        suggesting it will vanish as primes get larger.
+      </p>
+    </div>
+
+    <div class="chart-container">
+      <canvas id="sieveChart" height="280"></canvas>
+    </div>
+
+    <div class="key-finding">
+      <strong>The crown jewel:</strong> The Hardy&ndash;Littlewood singular series captures
+      exactly <span class="highlight3">71%</span> of the empirical mutual information,
+      with this fraction stable to within 0.7% across four orders of magnitude in scale
+      (10<sup>4</sup> to 10<sup>8</sup>). This remarkable stability suggests a clean
+      asymptotic structure underneath &mdash; an open problem for number theorists.
+    </div>
+
+    <div class="analogy">
+      If the dependence between prime gaps is a sound, the Cram&eacute;r model says there
+      should be silence. Hardy&ndash;Littlewood explains 71% of the music &mdash;
+      the melody comes from the sieve, the multiplicative structure that makes primes
+      avoid each other's multiples. The remaining 29% is a quiet harmony we can hear
+      but not yet fully explain.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
 <section id="entropy">
   <div class="container">
     <h2>Block Entropy: Measuring Predictability</h2>
@@ -293,86 +393,86 @@
       A fair coin flip has 1 bit of entropy. A loaded coin has less.
     </p>
     <p>
-      We measured the <span class="highlight2">block entropy</span> $H_k$: the total
-      information in $k$ consecutive gaps. If gaps were independent, this would grow as
-      $H_k = k \times H_1$ (the dashed line below). The gap between the dashed line and the
-      actual curve is the <span class="highlight3">redundancy</span> &mdash; information
-      you could predict from the pattern.
+      We measured the <span class="highlight2">block entropy</span> H<sub>k</sub>: the total
+      information in k consecutive gaps. If gaps were independent, this would grow as
+      H<sub>k</sub> = k &times; H<sub>1</sub> (the dashed line below). The gap between
+      the dashed line and the actual curve is the <span class="highlight3">redundancy</span>
+      &mdash; information you could predict from the pattern.
     </p>
 
     <div class="chart-container">
       <canvas id="entropyChart" height="300"></canvas>
     </div>
 
-    <div class="key-finding">
-      <strong>Finding:</strong> By block size $k = 10$, the redundancy reaches
-      <span class="highlight">27 bits</span>. An i.i.d. model predicts 45 bits of information
-      in 10 consecutive gaps, but the actual number is only 18. The gap sequence is
-      <span class="highlight2">2.5&times; more predictable</span> than random.
-    </div>
-
     <div class="card">
-      <h3>What does this mean?</h3>
+      <h3>Important caveat: the finite-sample ceiling</h3>
       <p>
-        Once you know 6&ndash;7 consecutive gaps, the next gap adds almost
-        <em>zero</em> new information. The entropy rate (new info per gap) drops from
-        4.5 bits at $k=1$ to essentially 0 at $k=8$. This means prime gaps have
-        strong short-range memory &mdash; they "remember" their recent past.
+        The entropy appears to saturate near 17.6 bits at large k.
+        This is primarily a <em>measurement artifact</em>, not a property of the primes:
+        with 200,000 samples, any 10 consecutive gaps form a nearly unique fingerprint
+        (199,990 out of 199,990 are distinct), so H<sub>10</sub> &asymp; log<sub>2</sub>(200,000) &asymp; 17.6.
+        The true entropy rate is almost certainly positive.
+      </p>
+      <p>
+        The measurements are <strong>reliable for small k</strong>: at k=1 (80 distinct values),
+        k=2 (1,879 distinct pairs), and k=3 (18,671 distinct triples), the estimates are
+        well-determined. The redundancy at k=2 &mdash; <span class="highlight">0.33 bits</span>
+        &mdash; matches the lag-1 mutual information exactly (as it must mathematically).
       </p>
     </div>
+
+    <p>
+      The single-gap entropy H<sub>1</sub> grows with scale as approximately
+      log<sub>2</sub>(log x), with a slowly increasing residual of 0.22&ndash;0.28 bits.
+      This is consistent with a discretized exponential model weighted by the
+      Hardy&ndash;Littlewood singular series.
+    </p>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<section id="mi">
+<section id="memory">
   <div class="container">
-    <h2>The Hidden Dependence</h2>
-    <p class="section-subtitle">What autocorrelation can't see</p>
+    <h2>Memory Length: Exactly 2</h2>
+    <p class="section-subtitle">How far back do prime gaps "remember"? Permutation tests give a sharp answer.</p>
 
     <p>
-      Traditionally, the dependence between gaps is measured by
-      <span class="highlight">autocorrelation</span> &mdash; which captures <em>linear</em>
-      relationships. The autocorrelation between consecutive prime gaps is tiny: about
-      $-0.04$. This led researchers to model gaps as "nearly independent."
+      To determine which lags have <em>genuine</em> dependence vs. estimator noise,
+      we ran <span class="highlight">permutation tests</span>: for each lag, we shuffled
+      one gap subsequence 200 times to build a null distribution, then checked whether
+      the observed MI exceeds this null.
     </p>
-    <p>
-      <span class="highlight2">Mutual information</span> captures <em>all</em> dependence
-      &mdash; linear, nonlinear, discrete, and everything in between. When we measured it,
-      the picture changed dramatically:
-    </p>
-
-    <div class="stat-row">
-      <div class="stat-box">
-        <div class="value" style="color: var(--red);">-0.04</div>
-        <div class="label">Autocorrelation (lag 1)</div>
-      </div>
-      <div class="stat-box">
-        <div class="value" style="color: var(--accent4);">0.32 bits</div>
-        <div class="label">Mutual Information (lag 1)</div>
-      </div>
-      <div class="stat-box">
-        <div class="value" style="color: var(--gold);">300&times;</div>
-        <div class="label">MI / Gaussian prediction</div>
-      </div>
-    </div>
 
     <div class="chart-container">
-      <canvas id="miChart" height="300"></canvas>
+      <canvas id="permChart" height="280"></canvas>
     </div>
 
     <div class="key-finding">
-      <strong>Finding:</strong> Knowing the previous gap tells you
-      <span class="highlight">0.32 bits</span> about the next one.
-      This is <span class="highlight2">300&times; more</span> than the linear correlation
-      would predict. The dependence is overwhelmingly <em>nonlinear</em> &mdash;
-      a consequence of gaps being discrete even integers sharing a common endpoint.
+      <strong>Finding:</strong> The gap process has <span class="highlight">effective memory of length 2</span>.
+      Lag 1 is overwhelmingly significant (z &gt; 1000).
+      Lag 2 is also significant (z &asymp; 11).
+      But at <span class="highlight2">lag 3 and beyond, the MI is indistinguishable from noise</span>
+      (|z| &lt; 2, p &gt; 0.01).
+    </p>
     </div>
 
-    <div class="analogy">
-      Imagine two people talking in sign language. Autocorrelation only measures if they're
-      waving their arms in sync. Mutual information measures if they're actually
-      <em>communicating</em>. Prime gaps are communicating intensely &mdash; but not in a
-      linear way.
+    <div class="card">
+      <h3>Why memory 2?</h3>
+      <p>
+        <strong>Lag 1:</strong> The gap g<sub>n</sub> = p<sub>n+1</sub> &minus; p<sub>n</sub>
+        and the next gap g<sub>n+1</sub> = p<sub>n+2</sub> &minus; p<sub>n+1</sub>
+        share the prime p<sub>n+1</sub>. This shared endpoint creates strong coupling
+        through the sieve (0.33 bits).
+      </p>
+      <p>
+        <strong>Lag 2:</strong> A weaker but real correlation, likely mediated by modular
+        structure &mdash; the residue of p<sub>n+1</sub> mod small primes constrains both
+        the gap before and after it.
+      </p>
+      <p>
+        <strong>Lag 3+:</strong> No detectable dependence. The sieve's influence
+        doesn't propagate beyond two steps in the gap sequence.
+      </p>
     </div>
   </div>
 </section>
@@ -381,32 +481,24 @@
 <section id="compress">
   <div class="container">
     <h2>Can You Compress Prime Gaps?</h2>
-    <p class="section-subtitle">Lempel-Ziv complexity: the zip test for randomness</p>
+    <p class="section-subtitle">Lempel-Ziv complexity: a zip test for randomness that avoids the sample-size ceiling</p>
 
     <p>
-      If a sequence is truly random, you can't compress it &mdash; every attempt to
-      "zip" it will produce something just as long. But if there are patterns, compression
-      finds them.
+      The LZ76 algorithm (ancestor of gzip) provides a <span class="highlight">consistent
+      entropy rate estimator</span> that avoids the curse of dimensionality plaguing block
+      entropy at large k. The ratio of LZ complexity for gaps vs. shuffled gaps
+      equals the ratio of their entropy rates.
     </p>
-    <p>
-      We applied the <span class="highlight">LZ76 algorithm</span> (the ancestor of gzip)
-      to the gap sequence and compared it to:
-    </p>
-    <ul style="margin: 12px 0 12px 24px; color: var(--muted);">
-      <li><strong style="color:var(--text)">Shuffled gaps:</strong> same values, random order (destroys all sequential structure)</li>
-      <li><strong style="color:var(--text)">Poisson synthetic:</strong> fake gaps drawn from the theoretical random model</li>
-    </ul>
 
     <div class="chart-container">
       <canvas id="lzChart" height="280"></canvas>
     </div>
 
     <div class="key-finding">
-      <strong>Finding:</strong> Prime gaps are
-      <span class="highlight">7% more compressible</span> than shuffled surrogates.
-      But the ratio approaches 1 at larger scales &mdash; confirming that gaps become
-      "more random" as primes get bigger. By scale $10^8$, the compressibility
-      advantage drops to 5.7%.
+      <strong>Finding:</strong> Prime gaps carry
+      <span class="highlight">6&ndash;8% less entropy per symbol</span> than an i.i.d. process
+      with the same marginal distribution. The ratio climbs from 0.924 to 0.943 across scales,
+      confirming convergence toward the Poisson/exponential regime predicted by Gallagher.
     </div>
   </div>
 </section>
@@ -415,17 +507,13 @@
 <section id="poisson">
   <div class="container">
     <h2>Testing the Poisson Prediction</h2>
-    <p class="section-subtitle">Gallagher said prime gaps should look like radioactive decay. Do they?</p>
+    <p class="section-subtitle">Gallagher proved primes should approach Poisson statistics. How fast?</p>
 
     <p>
-      In 1976, Gallagher proved (conditionally) that primes in short intervals follow
-      <span class="highlight">Poisson statistics</span> &mdash; the same distribution that
-      governs radioactive decay, phone call arrivals, and typos in a manuscript.
-    </p>
-    <p>
-      We tested this at five scales. The verdict: the fit is
-      <span class="highlight2">rejected at all scales</span> (with 200,000 data points,
-      even tiny deviations are detectable), <em>but the fit gets steadily better</em>.
+      In 1976, Gallagher showed (conditionally on the Hardy&ndash;Littlewood conjecture)
+      that the number of primes in short intervals follows
+      <span class="highlight">Poisson statistics</span> &mdash; the same distribution
+      governing radioactive decay. We tested this at five scales.
     </p>
 
     <div class="chart-container">
@@ -437,9 +525,8 @@
       <p>
         When we count primes in small windows, the variance is
         <span class="highlight">22&ndash;28% below</span> what Poisson predicts.
-        Primes are <em>too evenly spaced</em> compared to truly random events.
-        This is because a prime at $p$ "repels" nearby numbers from being prime
-        (the sieve effect). But this repulsion weakens at larger scales:
+        Primes are <em>too evenly spaced</em> compared to truly random events &mdash;
+        this is the sieve's "repulsion" effect. But it weakens at larger scales:
       </p>
       <table>
         <tr><th>Scale</th><th>Variance / Mean</th><th>Poisson prediction</th></tr>
@@ -449,10 +536,6 @@
         <tr><td>10<sup>7</sup></td><td>0.746</td><td>1.000</td></tr>
         <tr><td>10<sup>8</sup></td><td>0.768</td><td>1.000</td></tr>
       </table>
-      <p style="color: var(--muted); font-size: 0.85rem; margin-top: 8px;">
-        The ratio climbs toward 1, but slowly. Primes are approaching randomness,
-        but they're not there yet at scale 10<sup>8</sup>.
-      </p>
     </div>
   </div>
 </section>
@@ -461,7 +544,7 @@
 <section id="residues">
   <div class="container">
     <h2>Not All Primes Are Equal</h2>
-    <p class="section-subtitle">Does a prime's "identity" affect its gap?</p>
+    <p class="section-subtitle">A prime's residue class mod 6 affects its gap entropy</p>
 
     <p>
       Every prime bigger than 3 leaves a remainder of either <span class="highlight">1</span>
@@ -474,12 +557,12 @@
     </div>
 
     <div class="key-finding">
-      <strong>Finding:</strong> Primes $\equiv 5 \pmod{6}$ have
+      <strong>Finding:</strong> Primes &equiv; 5 (mod 6) have
       <span class="highlight2">~0.06 bits more entropy</span> in their gaps than
-      primes $\equiv 1 \pmod{6}$, consistently at all scales. This traces back to the
-      <span class="highlight3">Hardy&ndash;Littlewood singular series</span>, which predicts
-      that certain gap sizes (like 6) are enhanced by a factor of 2 due to divisibility by 3,
-      creating subtly different gap statistics for the two classes.
+      primes &equiv; 1 (mod 6), consistently at all scales. This connects to the
+      Hardy&ndash;Littlewood singular series, which enhances gaps divisible by 3
+      (like gap = 6) by a factor of 2, creating subtly different distributions
+      for the two residue classes.
     </div>
   </div>
 </section>
@@ -488,38 +571,52 @@
 <section id="findings">
   <div class="container">
     <h2>Summary of Key Findings</h2>
-    <p class="section-subtitle">Five experiments, one story</p>
+    <p class="section-subtitle">A three-level decomposition of prime gap dependence</p>
+
+    <div class="card" style="border-color: var(--gold); border-width: 2px;">
+      <h3 style="color: var(--gold);">The Main Result: MI Decomposition</h3>
+      <p>Consecutive prime gaps share 0.33 bits of mutual information. The Cram&eacute;r random model
+      predicts 0 (gaps should be independent). The Hardy&ndash;Littlewood singular series captures
+      71% of the signal (0.23 bits), with remarkable stability across four orders of magnitude.
+      The remaining 29% represents higher-order sieve effects that decrease with scale.</p>
+    </div>
 
     <div class="card" style="border-color: var(--accent);">
-      <h3>1. Prime gaps have massive memory</h3>
-      <p>10 consecutive gaps carry only 18 bits of information &mdash; an i.i.d. model predicts 45 bits. The sequence is 2.5&times; more predictable than random.</p>
+      <h3>Memory length = 2</h3>
+      <p>Permutation tests show significant MI at lags 1 and 2, but not at lag 3 or beyond.
+      The gap process has effective memory of exactly 2 steps &mdash; the sieve's influence
+      doesn't propagate further.</p>
     </div>
 
     <div class="card" style="border-color: var(--accent2);">
-      <h3>2. Nonlinear dependence dwarfs linear correlation</h3>
-      <p>Mutual information between consecutive gaps is 0.32 bits &mdash; 300&times; more than the autocorrelation predicts. Standard statistical models miss the dominant dependence structure.</p>
+      <h3>Non-Gaussian dependence dwarfs linear correlation</h3>
+      <p>The mutual information (0.33 bits) exceeds the Gaussian prediction from autocorrelation
+      (0.001 bits) by a factor of ~300. This reflects the discrete, non-Gaussian character of
+      the gap distribution, not a mysterious nonlinear effect.</p>
     </div>
 
     <div class="card" style="border-color: var(--accent3);">
-      <h3>3. The gap sequence is compressible, but becoming less so</h3>
-      <p>LZ complexity is 7% below shuffled surrogates at scale 10<sup>4</sup>, closing to 5.7% at scale 10<sup>8</sup>. The gaps are converging toward true randomness.</p>
+      <h3>Five convergence diagnostics agree</h3>
+      <p>LZ entropy rate ratio (0.92 &rarr; 0.94), MI at lag 1 (0.34 &rarr; 0.32), KS statistic
+      (0.160 &rarr; 0.134), variance/mean (0.72 &rarr; 0.77), and H<sub>1</sub> residual
+      (0.22 &rarr; 0.28) all independently confirm monotonic convergence toward the
+      Gallagher&ndash;Poisson prediction. The convergence is real but slow.</p>
     </div>
 
     <div class="card" style="border-color: var(--accent4);">
-      <h3>4. Poisson is the right destination, but we're not there yet</h3>
-      <p>All goodness-of-fit statistics improve with scale. The variance-to-mean ratio climbs from 0.72 toward 1.0. The convergence is real but slow.</p>
-    </div>
-
-    <div class="card" style="border-color: var(--gold);">
-      <h3>5. Residue classes carry different information</h3>
-      <p>Primes &equiv; 5 (mod 6) have ~0.06 bits more gap entropy than primes &equiv; 1 (mod 6), linked to the Hardy&ndash;Littlewood singular series.</p>
+      <h3>Open questions</h3>
+      <p>Does the 71% ratio have a limit as scale &rarr; &infin;? Can we prove
+      MI<sub>H-L</sub> &rarr; 0? What is the asymptotic constant in
+      H<sub>1</sub> = log<sub>2</sub>(log x) + C + o(1)?
+      These are concrete, well-posed problems for analytic number theorists.</p>
     </div>
 
     <div class="analogy" style="margin-top: 32px;">
       Prime gaps are like a river approaching the sea. Close to the source (small primes),
-      the current has structure &mdash; eddies, rapids, predictable bends. As the river
-      widens (large primes), the flow becomes smoother and more random. Information theory
-      measures exactly how turbulent the river is, and how fast it's calming down.
+      the current has structure &mdash; eddies, rapids, predictable bends, all created by
+      the sieve's sculpting of the integers. As the river widens (large primes), the flow
+      becomes smoother. Information theory measures exactly how turbulent the river is
+      at each point, and the singular series tells us which rocks are causing the turbulence.
     </div>
   </div>
 </section>
@@ -530,6 +627,9 @@
     Tobias Canavesi &middot; April 2026
   </p>
   <p style="margin-top: 8px;">
+    Paper: <em>Information-Theoretic Properties of Prime Gap Sequences</em>
+  </p>
+  <p style="margin-top: 4px;">
     Code &amp; data:
     <a href="https://github.com/tobiascanavesi/information-theory-gaps" target="_blank">
       github.com/tobiascanavesi/information-theory-gaps</a>
@@ -577,7 +677,6 @@ function updateGapDisplay() {
   html += `<span class="prime" style="color:var(--accent)">${PRIMES[end]}</span>`;
   el.innerHTML = html;
 
-  // Stats for visible window
   const visGaps = GAPS.slice(start, end);
   document.getElementById('meanGap').textContent = (visGaps.reduce((a, b) => a + b, 0) / visGaps.length).toFixed(1);
   document.getElementById('maxGap').textContent = Math.max(...visGaps);
@@ -590,32 +689,74 @@ updateGapDisplay();
 
 
 // ============================================================
-// Chart: Block Entropy
+// Chart: Sieve Decomposition (THE MAIN RESULT)
 // ============================================================
-const entropyData = {
-  labels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-  datasets: [
-    {
-      label: 'H_k (actual, scale 10^8)',
-      data: [4.481, 8.634, 12.499, 15.607, 17.186, 17.557, 17.604, 17.609, 17.610, 17.610],
-      borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',
-      pointRadius: 4, tension: 0.2, fill: true,
-    },
-    {
-      label: 'H_k (i.i.d. prediction)',
-      data: [4.481, 8.963, 13.444, 17.926, 22.407, 26.889, 31.370, 35.852, 40.333, 44.815],
-      borderColor: '#94a3b8', borderDash: [8, 4],
-      pointRadius: 0, tension: 0,
-    }
-  ]
-};
-new Chart(document.getElementById('entropyChart'), {
-  type: 'line', data: entropyData,
+new Chart(document.getElementById('sieveChart'), {
+  type: 'bar',
+  data: {
+    labels: ['10^4', '10^5', '10^6', '10^7', '10^8'],
+    datasets: [
+      {
+        label: 'Hardy-Littlewood prediction',
+        data: [0.239, 0.239, 0.238, 0.234, 0.229],
+        backgroundColor: 'rgba(167,139,250,0.7)',
+        borderColor: '#a78bfa', borderWidth: 1,
+      },
+      {
+        label: 'Residual (higher-order sieve)',
+        data: [0.100, 0.099, 0.098, 0.095, 0.093],
+        backgroundColor: 'rgba(251,191,36,0.7)',
+        borderColor: '#fbbf24', borderWidth: 1,
+      }
+    ]
+  },
   options: {
     responsive: true,
     plugins: {
       legend: { labels: { color: '#e2e8f0' } },
-      title: { display: true, text: 'Block Entropy H_k vs Block Size k', color: '#e2e8f0' }
+      title: { display: true, text: 'Decomposition of Lag-1 MI: H-L Singular Series vs Residual', color: '#e2e8f0' }
+    },
+    scales: {
+      x: { stacked: true, title: { display: true, text: 'Scale (primes near)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: { stacked: true, title: { display: true, text: 'Mutual Information (bits)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+    }
+  }
+});
+
+
+// ============================================================
+// Chart: Block Entropy
+// ============================================================
+new Chart(document.getElementById('entropyChart'), {
+  type: 'line',
+  data: {
+    labels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    datasets: [
+      {
+        label: 'H_k (actual, scale 10^8)',
+        data: [4.481, 8.634, 12.499, 15.607, 17.186, 17.557, 17.604, 17.609, 17.610, 17.610],
+        borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',
+        pointRadius: 4, tension: 0.2, fill: true,
+      },
+      {
+        label: 'H_k (i.i.d. prediction)',
+        data: [4.481, 8.963, 13.444, 17.926, 22.407, 26.889, 31.370, 35.852, 40.333, 44.815],
+        borderColor: '#94a3b8', borderDash: [8, 4],
+        pointRadius: 0, tension: 0,
+      },
+      {
+        label: 'Finite-sample ceiling: log2(N)',
+        data: [17.6, 17.6, 17.6, 17.6, 17.6, 17.6, 17.6, 17.6, 17.6, 17.6],
+        borderColor: '#f87171', borderDash: [4, 4],
+        pointRadius: 0, borderWidth: 1,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+      title: { display: true, text: 'Block Entropy H_k vs Block Size k (with finite-sample ceiling)', color: '#e2e8f0' }
     },
     scales: {
       x: { title: { display: true, text: 'Block size k', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
@@ -626,52 +767,43 @@ new Chart(document.getElementById('entropyChart'), {
 
 
 // ============================================================
-// Chart: Mutual Information
+// Chart: Permutation Test Results
 // ============================================================
-const miLags = [];
-const miVals = [];
-const acVals = [];
-// Data from scale 10^8 (first 30 lags for readability)
-const miData108 = [
-  [1,0.3224,0.0370],[2,0.0050,0.0133],[3,0.0020,0.0065],[4,0.0027,0.0050],
-  [5,0.0028,0.0048],[6,0.0028,0.0020],[7,0.0024,0.0009],[8,0.0027,0.0036],
-  [9,0.0033,0.0033],[10,0.0041,0.0033],[12,0.0030,0.0031],[15,0.0024,0.0009],
-  [20,0.0024,0.0016],[25,0.0024,0.0029],[30,0.0024,0.0014],
-  [40,0.0024,0.0014],[50,0.0025,0.0014],[60,0.0024,0.0018],
-  [80,0.0024,0.0017],[100,0.0025,0.0032]
-];
-miData108.forEach(d => { miLags.push(d[0]); miVals.push(d[1]); acVals.push(d[2]*d[2]/(2*Math.LN2)); });
-
-new Chart(document.getElementById('miChart'), {
-  type: 'line',
+new Chart(document.getElementById('permChart'), {
+  type: 'bar',
   data: {
-    labels: miLags,
+    labels: ['Lag 1', 'Lag 2', 'Lag 3', 'Lag 5', 'Lag 10', 'Lag 50', 'Lag 100'],
     datasets: [
       {
-        label: 'Mutual Information (bits)',
-        data: miVals, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)',
-        pointRadius: 4, tension: 0.2, fill: true,
-      },
-      {
-        label: 'Gaussian prediction from autocorrelation',
-        data: acVals, borderColor: '#f87171', borderDash: [6, 3],
-        pointRadius: 3, tension: 0.2,
+        label: 'z-score (observed MI vs null)',
+        data: [1148, 11.2, -1.9, -0.03, -0.6, -1.1, 0.3],
+        backgroundColor: [
+          'rgba(52,211,153,0.8)', 'rgba(52,211,153,0.8)',
+          'rgba(148,163,184,0.4)', 'rgba(148,163,184,0.4)',
+          'rgba(148,163,184,0.4)', 'rgba(148,163,184,0.4)', 'rgba(148,163,184,0.4)'
+        ],
+        borderColor: [
+          '#34d399', '#34d399',
+          '#94a3b8', '#94a3b8', '#94a3b8', '#94a3b8', '#94a3b8'
+        ],
+        borderWidth: 1,
       }
     ]
   },
   options: {
     responsive: true,
+    indexAxis: 'y',
     plugins: {
-      legend: { labels: { color: '#e2e8f0' } },
-      title: { display: true, text: 'Mutual Information vs Lag (scale 10^8)', color: '#e2e8f0' }
+      legend: { display: false },
+      title: { display: true, text: 'Permutation Test: MI Significance at Scale 10^8 (z > 3 = significant)', color: '#e2e8f0' }
     },
     scales: {
-      x: { title: { display: true, text: 'Lag', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
-      y: {
-        type: 'logarithmic', min: 0.00001,
-        title: { display: true, text: 'bits (log scale)', color: '#94a3b8' },
+      x: {
+        type: 'logarithmic', min: 0.1, max: 2000,
+        title: { display: true, text: 'z-score (log scale, green = significant)', color: '#94a3b8' },
         ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
       },
+      y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
     }
   }
 });
@@ -686,16 +818,10 @@ new Chart(document.getElementById('lzChart'), {
     labels: ['10^4', '10^5', '10^6', '10^7', '10^8'],
     datasets: [
       {
-        label: 'C(gaps) / C(shuffled)',
-        data: [0.924, 0.926, 0.929, 0.936, 0.943],
+        label: 'LZ entropy rate: gaps / shuffled',
+        data: [0.9235, 0.9260, 0.9290, 0.9359, 0.9431],
         borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.15)',
         pointRadius: 5, tension: 0.2, fill: true,
-      },
-      {
-        label: 'C(gaps) / C(Poisson)',
-        data: [0.912, 0.914, 0.918, 0.925, 0.933],
-        borderColor: '#a78bfa', borderDash: [6, 3],
-        pointRadius: 5, tension: 0.2,
       },
       {
         label: 'Random baseline (= 1)',
@@ -709,13 +835,13 @@ new Chart(document.getElementById('lzChart'), {
     responsive: true,
     plugins: {
       legend: { labels: { color: '#e2e8f0' } },
-      title: { display: true, text: 'LZ76 Compressibility Ratio by Scale', color: '#e2e8f0' }
+      title: { display: true, text: 'LZ76 Entropy Rate Ratio (gaps vs shuffled)', color: '#e2e8f0' }
     },
     scales: {
       x: { title: { display: true, text: 'Scale (primes near)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
       y: {
-        min: 0.88, max: 1.02,
-        title: { display: true, text: 'Complexity ratio', color: '#94a3b8' },
+        min: 0.90, max: 1.02,
+        title: { display: true, text: 'Entropy rate ratio', color: '#94a3b8' },
         ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
       },
     }
@@ -732,7 +858,7 @@ new Chart(document.getElementById('ksChart'), {
     labels: ['10^4', '10^5', '10^6', '10^7', '10^8'],
     datasets: [
       {
-        label: 'KS Statistic (lower = better fit)',
+        label: 'KS Statistic (lower = better fit to Exp(1))',
         data: [0.1597, 0.1592, 0.1541, 0.1466, 0.1343],
         borderColor: '#f472b6', backgroundColor: 'rgba(244,114,182,0.15)',
         pointRadius: 5, tension: 0.2, fill: true,
@@ -743,14 +869,11 @@ new Chart(document.getElementById('ksChart'), {
     responsive: true,
     plugins: {
       legend: { labels: { color: '#e2e8f0' } },
-      title: { display: true, text: 'Kolmogorov-Smirnov Test: Normalized Gaps vs Exp(1)', color: '#e2e8f0' }
+      title: { display: true, text: 'Kolmogorov-Smirnov: Normalized Gaps vs Exp(1)', color: '#e2e8f0' }
     },
     scales: {
       x: { title: { display: true, text: 'Scale (primes near)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
-      y: {
-        title: { display: true, text: 'KS Statistic', color: '#94a3b8' },
-        ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
-      },
+      y: { title: { display: true, text: 'KS Statistic', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
     }
   }
 });
@@ -786,10 +909,7 @@ new Chart(document.getElementById('residueChart'), {
     },
     scales: {
       x: { title: { display: true, text: 'Scale', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
-      y: {
-        title: { display: true, text: 'H_1 (bits)', color: '#94a3b8' },
-        ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
-      },
+      y: { title: { display: true, text: 'H_1 (bits)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
     }
   }
 });
