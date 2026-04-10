@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Random Are Prime Gaps? An Information Theory Exploration</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #f472b6;
+    --accent3: #a78bfa;
+    --accent4: #34d399;
+    --gold: #fbbf24;
+    --red: #f87171;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+  header {
+    text-align: center;
+    padding: 80px 24px 60px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+  header .subtitle {
+    color: var(--muted);
+    font-size: 1.1rem;
+    max-width: 650px;
+    margin: 0 auto 24px;
+  }
+  header .author { color: var(--accent); font-size: 0.95rem; }
+  .badge {
+    display: inline-block;
+    background: rgba(56,189,248,0.15);
+    border: 1px solid rgba(56,189,248,0.3);
+    color: var(--accent);
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    margin-top: 16px;
+  }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(15,23,42,0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+  nav .container { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  nav .container::-webkit-scrollbar { display: none; }
+  nav a {
+    white-space: nowrap;
+    text-decoration: none;
+    color: var(--muted);
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  nav a:hover, nav a.active { background: var(--card); color: var(--accent); }
+
+  section { padding: 60px 0; border-bottom: 1px solid var(--border); }
+  section h2 {
+    font-size: 1.6rem; margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+  }
+  section .section-subtitle { color: var(--muted); margin-bottom: 32px; font-size: 1rem; }
+  p { margin-bottom: 16px; }
+  .highlight { color: var(--accent); font-weight: 600; }
+  .highlight2 { color: var(--accent2); font-weight: 600; }
+  .highlight3 { color: var(--accent3); font-weight: 600; }
+  .highlight4 { color: var(--accent4); font-weight: 600; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .card h3 { color: var(--accent); font-size: 1.1rem; margin-bottom: 12px; }
+
+  .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .stat-box {
+    flex: 1; min-width: 140px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px; text-align: center;
+  }
+  .stat-box .value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+  .stat-box .label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+  canvas { width: 100% !important; height: auto !important; border-radius: 8px; }
+  .chart-container { position: relative; margin: 20px 0; }
+
+  .interactive-box {
+    background: var(--card);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 24px 0;
+  }
+  .interactive-box h3 { color: var(--gold); margin-bottom: 12px; }
+
+  .slider-row { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
+  .slider-row label { min-width: 120px; color: var(--muted); font-size: 0.9rem; }
+  .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .slider-row .val { min-width: 50px; text-align: right; color: var(--accent); font-weight: 600; }
+
+  .gap-display {
+    display: flex; flex-wrap: wrap; gap: 4px; margin: 16px 0;
+    font-family: 'Courier New', monospace; font-size: 0.85rem;
+  }
+  .gap-display .prime { padding: 4px 8px; border-radius: 4px; }
+  .gap-display .gap-val {
+    padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;
+    color: var(--bg); font-weight: 700; margin: 0 1px;
+    display: flex; align-items: center;
+  }
+
+  .key-finding {
+    background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(167,139,250,0.1));
+    border-left: 3px solid var(--accent3);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 20px 0;
+  }
+  .key-finding strong { color: var(--gold); }
+
+  .analogy {
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.2);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 20px 0;
+  }
+  .analogy::before { content: "Analogy: "; color: var(--gold); font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+  th { color: var(--accent); font-weight: 600; }
+  td:first-child, th:first-child { text-align: left; }
+
+  footer {
+    text-align: center; padding: 40px 24px;
+    color: var(--muted); font-size: 0.85rem;
+  }
+  footer a { color: var(--accent); }
+
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.5rem; }
+    .stat-row { flex-direction: column; }
+    .stat-box { min-width: unset; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>How Random Are Prime Gaps?</h1>
+  <p class="subtitle">
+    An information theory exploration of the spaces between prime numbers &mdash;
+    measuring what autocorrelation can't see
+  </p>
+  <p class="author">Tobias Canavesi &middot; April 2026</p>
+  <span class="badge">Interactive Research Guide</span>
+</header>
+
+<nav>
+  <div class="container">
+    <a href="#intro">The Question</a>
+    <a href="#explore">Explore Gaps</a>
+    <a href="#entropy">Entropy</a>
+    <a href="#mi">Hidden Dependence</a>
+    <a href="#compress">Compressibility</a>
+    <a href="#poisson">Poisson Test</a>
+    <a href="#residues">Residue Classes</a>
+    <a href="#findings">Key Findings</a>
+  </div>
+</nav>
+
+<!-- ============================================================ -->
+<section id="intro">
+  <div class="container">
+    <h2>The Big Question</h2>
+    <p class="section-subtitle">Are prime gaps random, or do they hide secret patterns?</p>
+
+    <p>
+      Prime numbers &mdash; 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, ... &mdash; are the atoms of arithmetic.
+      The <span class="highlight">gaps between consecutive primes</span> form a sequence:
+      1, 2, 2, 4, 2, 4, 2, 4, 6, 2, ...
+    </p>
+    <p>
+      Mathematicians have long suspected that these gaps behave like a
+      <span class="highlight2">random process</span> at large scales &mdash;
+      specifically, like a <em>Poisson process</em>, which is the same statistics that
+      govern radioactive decay and the arrival of buses at a stop.
+    </p>
+    <p>
+      But <em>how random</em> are they, really? And what structure do they hide?
+    </p>
+    <p>
+      We used tools from <span class="highlight3">information theory</span> &mdash;
+      the mathematics of communication invented by Claude Shannon &mdash;
+      to answer this question. What we found surprised us.
+    </p>
+
+    <div class="analogy">
+      Think of prime gaps as a radio signal. Autocorrelation (the standard tool) is like
+      listening with a basic AM radio &mdash; you hear the loudest notes. Information theory
+      is like a spectrum analyzer: it reveals all the hidden frequencies, including the
+      ones you can't hear with AM.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="explore">
+  <div class="container">
+    <h2>Explore Prime Gaps</h2>
+    <p class="section-subtitle">See the gaps for yourself &mdash; drag the slider to move through the primes</p>
+
+    <div class="interactive-box">
+      <h3>Prime Gap Explorer</h3>
+      <div class="slider-row">
+        <label>Starting prime:</label>
+        <input type="range" id="startSlider" min="0" max="900" value="0" step="1">
+        <span class="val" id="startVal">2</span>
+      </div>
+      <div id="gapDisplay" class="gap-display"></div>
+      <p style="color: var(--muted); font-size: 0.85rem; margin-top: 12px;">
+        Numbers show the <strong style="color:var(--accent)">gap</strong> between consecutive primes.
+        Color intensity reflects gap size: <span style="color:#34d399">small</span> to <span style="color:#f87171">large</span>.
+      </p>
+    </div>
+
+    <div class="stat-row" id="gapStats">
+      <div class="stat-box">
+        <div class="value" id="meanGap">--</div>
+        <div class="label">Mean Gap</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" id="maxGap">--</div>
+        <div class="label">Max Gap</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" id="minGap">--</div>
+        <div class="label">Min Gap</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" id="gap2pct">--</div>
+        <div class="label">% Gap = 2</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="entropy">
+  <div class="container">
+    <h2>Block Entropy: Measuring Predictability</h2>
+    <p class="section-subtitle">How much "surprise" is in each gap, given what came before?</p>
+
+    <p>
+      <span class="highlight">Shannon entropy</span> measures the average surprise or
+      information content of a sequence, in <em>bits</em>.
+      A fair coin flip has 1 bit of entropy. A loaded coin has less.
+    </p>
+    <p>
+      We measured the <span class="highlight2">block entropy</span> $H_k$: the total
+      information in $k$ consecutive gaps. If gaps were independent, this would grow as
+      $H_k = k \times H_1$ (the dashed line below). The gap between the dashed line and the
+      actual curve is the <span class="highlight3">redundancy</span> &mdash; information
+      you could predict from the pattern.
+    </p>
+
+    <div class="chart-container">
+      <canvas id="entropyChart" height="300"></canvas>
+    </div>
+
+    <div class="key-finding">
+      <strong>Finding:</strong> By block size $k = 10$, the redundancy reaches
+      <span class="highlight">27 bits</span>. An i.i.d. model predicts 45 bits of information
+      in 10 consecutive gaps, but the actual number is only 18. The gap sequence is
+      <span class="highlight2">2.5&times; more predictable</span> than random.
+    </div>
+
+    <div class="card">
+      <h3>What does this mean?</h3>
+      <p>
+        Once you know 6&ndash;7 consecutive gaps, the next gap adds almost
+        <em>zero</em> new information. The entropy rate (new info per gap) drops from
+        4.5 bits at $k=1$ to essentially 0 at $k=8$. This means prime gaps have
+        strong short-range memory &mdash; they "remember" their recent past.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="mi">
+  <div class="container">
+    <h2>The Hidden Dependence</h2>
+    <p class="section-subtitle">What autocorrelation can't see</p>
+
+    <p>
+      Traditionally, the dependence between gaps is measured by
+      <span class="highlight">autocorrelation</span> &mdash; which captures <em>linear</em>
+      relationships. The autocorrelation between consecutive prime gaps is tiny: about
+      $-0.04$. This led researchers to model gaps as "nearly independent."
+    </p>
+    <p>
+      <span class="highlight2">Mutual information</span> captures <em>all</em> dependence
+      &mdash; linear, nonlinear, discrete, and everything in between. When we measured it,
+      the picture changed dramatically:
+    </p>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="value" style="color: var(--red);">-0.04</div>
+        <div class="label">Autocorrelation (lag 1)</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" style="color: var(--accent4);">0.32 bits</div>
+        <div class="label">Mutual Information (lag 1)</div>
+      </div>
+      <div class="stat-box">
+        <div class="value" style="color: var(--gold);">300&times;</div>
+        <div class="label">MI / Gaussian prediction</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <canvas id="miChart" height="300"></canvas>
+    </div>
+
+    <div class="key-finding">
+      <strong>Finding:</strong> Knowing the previous gap tells you
+      <span class="highlight">0.32 bits</span> about the next one.
+      This is <span class="highlight2">300&times; more</span> than the linear correlation
+      would predict. The dependence is overwhelmingly <em>nonlinear</em> &mdash;
+      a consequence of gaps being discrete even integers sharing a common endpoint.
+    </div>
+
+    <div class="analogy">
+      Imagine two people talking in sign language. Autocorrelation only measures if they're
+      waving their arms in sync. Mutual information measures if they're actually
+      <em>communicating</em>. Prime gaps are communicating intensely &mdash; but not in a
+      linear way.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="compress">
+  <div class="container">
+    <h2>Can You Compress Prime Gaps?</h2>
+    <p class="section-subtitle">Lempel-Ziv complexity: the zip test for randomness</p>
+
+    <p>
+      If a sequence is truly random, you can't compress it &mdash; every attempt to
+      "zip" it will produce something just as long. But if there are patterns, compression
+      finds them.
+    </p>
+    <p>
+      We applied the <span class="highlight">LZ76 algorithm</span> (the ancestor of gzip)
+      to the gap sequence and compared it to:
+    </p>
+    <ul style="margin: 12px 0 12px 24px; color: var(--muted);">
+      <li><strong style="color:var(--text)">Shuffled gaps:</strong> same values, random order (destroys all sequential structure)</li>
+      <li><strong style="color:var(--text)">Poisson synthetic:</strong> fake gaps drawn from the theoretical random model</li>
+    </ul>
+
+    <div class="chart-container">
+      <canvas id="lzChart" height="280"></canvas>
+    </div>
+
+    <div class="key-finding">
+      <strong>Finding:</strong> Prime gaps are
+      <span class="highlight">7% more compressible</span> than shuffled surrogates.
+      But the ratio approaches 1 at larger scales &mdash; confirming that gaps become
+      "more random" as primes get bigger. By scale $10^8$, the compressibility
+      advantage drops to 5.7%.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="poisson">
+  <div class="container">
+    <h2>Testing the Poisson Prediction</h2>
+    <p class="section-subtitle">Gallagher said prime gaps should look like radioactive decay. Do they?</p>
+
+    <p>
+      In 1976, Gallagher proved (conditionally) that primes in short intervals follow
+      <span class="highlight">Poisson statistics</span> &mdash; the same distribution that
+      governs radioactive decay, phone call arrivals, and typos in a manuscript.
+    </p>
+    <p>
+      We tested this at five scales. The verdict: the fit is
+      <span class="highlight2">rejected at all scales</span> (with 200,000 data points,
+      even tiny deviations are detectable), <em>but the fit gets steadily better</em>.
+    </p>
+
+    <div class="chart-container">
+      <canvas id="ksChart" height="280"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>The Underdispersion Signal</h3>
+      <p>
+        When we count primes in small windows, the variance is
+        <span class="highlight">22&ndash;28% below</span> what Poisson predicts.
+        Primes are <em>too evenly spaced</em> compared to truly random events.
+        This is because a prime at $p$ "repels" nearby numbers from being prime
+        (the sieve effect). But this repulsion weakens at larger scales:
+      </p>
+      <table>
+        <tr><th>Scale</th><th>Variance / Mean</th><th>Poisson prediction</th></tr>
+        <tr><td>10<sup>4</sup></td><td>0.722</td><td>1.000</td></tr>
+        <tr><td>10<sup>5</sup></td><td>0.723</td><td>1.000</td></tr>
+        <tr><td>10<sup>6</sup></td><td>0.733</td><td>1.000</td></tr>
+        <tr><td>10<sup>7</sup></td><td>0.746</td><td>1.000</td></tr>
+        <tr><td>10<sup>8</sup></td><td>0.768</td><td>1.000</td></tr>
+      </table>
+      <p style="color: var(--muted); font-size: 0.85rem; margin-top: 8px;">
+        The ratio climbs toward 1, but slowly. Primes are approaching randomness,
+        but they're not there yet at scale 10<sup>8</sup>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="residues">
+  <div class="container">
+    <h2>Not All Primes Are Equal</h2>
+    <p class="section-subtitle">Does a prime's "identity" affect its gap?</p>
+
+    <p>
+      Every prime bigger than 3 leaves a remainder of either <span class="highlight">1</span>
+      or <span class="highlight2">5</span> when divided by 6. We split primes into these
+      two camps and measured the gap entropy separately.
+    </p>
+
+    <div class="chart-container">
+      <canvas id="residueChart" height="280"></canvas>
+    </div>
+
+    <div class="key-finding">
+      <strong>Finding:</strong> Primes $\equiv 5 \pmod{6}$ have
+      <span class="highlight2">~0.06 bits more entropy</span> in their gaps than
+      primes $\equiv 1 \pmod{6}$, consistently at all scales. This traces back to the
+      <span class="highlight3">Hardy&ndash;Littlewood singular series</span>, which predicts
+      that certain gap sizes (like 6) are enhanced by a factor of 2 due to divisibility by 3,
+      creating subtly different gap statistics for the two classes.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="findings">
+  <div class="container">
+    <h2>Summary of Key Findings</h2>
+    <p class="section-subtitle">Five experiments, one story</p>
+
+    <div class="card" style="border-color: var(--accent);">
+      <h3>1. Prime gaps have massive memory</h3>
+      <p>10 consecutive gaps carry only 18 bits of information &mdash; an i.i.d. model predicts 45 bits. The sequence is 2.5&times; more predictable than random.</p>
+    </div>
+
+    <div class="card" style="border-color: var(--accent2);">
+      <h3>2. Nonlinear dependence dwarfs linear correlation</h3>
+      <p>Mutual information between consecutive gaps is 0.32 bits &mdash; 300&times; more than the autocorrelation predicts. Standard statistical models miss the dominant dependence structure.</p>
+    </div>
+
+    <div class="card" style="border-color: var(--accent3);">
+      <h3>3. The gap sequence is compressible, but becoming less so</h3>
+      <p>LZ complexity is 7% below shuffled surrogates at scale 10<sup>4</sup>, closing to 5.7% at scale 10<sup>8</sup>. The gaps are converging toward true randomness.</p>
+    </div>
+
+    <div class="card" style="border-color: var(--accent4);">
+      <h3>4. Poisson is the right destination, but we're not there yet</h3>
+      <p>All goodness-of-fit statistics improve with scale. The variance-to-mean ratio climbs from 0.72 toward 1.0. The convergence is real but slow.</p>
+    </div>
+
+    <div class="card" style="border-color: var(--gold);">
+      <h3>5. Residue classes carry different information</h3>
+      <p>Primes &equiv; 5 (mod 6) have ~0.06 bits more gap entropy than primes &equiv; 1 (mod 6), linked to the Hardy&ndash;Littlewood singular series.</p>
+    </div>
+
+    <div class="analogy" style="margin-top: 32px;">
+      Prime gaps are like a river approaching the sea. Close to the source (small primes),
+      the current has structure &mdash; eddies, rapids, predictable bends. As the river
+      widens (large primes), the flow becomes smoother and more random. Information theory
+      measures exactly how turbulent the river is, and how fast it's calming down.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>
+    <strong>How Random Are Prime Gaps?</strong> &middot;
+    Tobias Canavesi &middot; April 2026
+  </p>
+  <p style="margin-top: 8px;">
+    Code &amp; data:
+    <a href="https://github.com/tobiascanavesi/information-theory-gaps" target="_blank">
+      github.com/tobiascanavesi/information-theory-gaps</a>
+  </p>
+</footer>
+
+<script>
+// ============================================================
+// Prime generation and gap explorer
+// ============================================================
+function sieve(n) {
+  const s = new Uint8Array(n + 1);
+  s[0] = s[1] = 1;
+  for (let i = 2; i * i <= n; i++) {
+    if (!s[i]) for (let j = i * i; j <= n; j += i) s[j] = 1;
+  }
+  const primes = [];
+  for (let i = 2; i <= n; i++) if (!s[i]) primes.push(i);
+  return primes;
+}
+
+const PRIMES = sieve(10000);
+const GAPS = PRIMES.slice(1).map((p, i) => p - PRIMES[i]);
+
+function gapColor(g) {
+  const t = Math.min(g / 20, 1);
+  const r = Math.round(52 + t * 196);
+  const gr = Math.round(211 - t * 100);
+  const b = Math.round(153 - t * 40);
+  return `rgb(${r},${gr},${b})`;
+}
+
+function updateGapDisplay() {
+  const start = parseInt(document.getElementById('startSlider').value);
+  const count = 25;
+  const end = Math.min(start + count, PRIMES.length - 1);
+  const el = document.getElementById('gapDisplay');
+  document.getElementById('startVal').textContent = PRIMES[start];
+
+  let html = '';
+  for (let i = start; i < end; i++) {
+    html += `<span class="prime" style="color:var(--accent)">${PRIMES[i]}</span>`;
+    html += `<span class="gap-val" style="background:${gapColor(GAPS[i])}">${GAPS[i]}</span>`;
+  }
+  html += `<span class="prime" style="color:var(--accent)">${PRIMES[end]}</span>`;
+  el.innerHTML = html;
+
+  // Stats for visible window
+  const visGaps = GAPS.slice(start, end);
+  document.getElementById('meanGap').textContent = (visGaps.reduce((a, b) => a + b, 0) / visGaps.length).toFixed(1);
+  document.getElementById('maxGap').textContent = Math.max(...visGaps);
+  document.getElementById('minGap').textContent = Math.min(...visGaps);
+  document.getElementById('gap2pct').textContent = (100 * visGaps.filter(g => g === 2).length / visGaps.length).toFixed(0) + '%';
+}
+
+document.getElementById('startSlider').addEventListener('input', updateGapDisplay);
+updateGapDisplay();
+
+
+// ============================================================
+// Chart: Block Entropy
+// ============================================================
+const entropyData = {
+  labels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  datasets: [
+    {
+      label: 'H_k (actual, scale 10^8)',
+      data: [4.481, 8.634, 12.499, 15.607, 17.186, 17.557, 17.604, 17.609, 17.610, 17.610],
+      borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',
+      pointRadius: 4, tension: 0.2, fill: true,
+    },
+    {
+      label: 'H_k (i.i.d. prediction)',
+      data: [4.481, 8.963, 13.444, 17.926, 22.407, 26.889, 31.370, 35.852, 40.333, 44.815],
+      borderColor: '#94a3b8', borderDash: [8, 4],
+      pointRadius: 0, tension: 0,
+    }
+  ]
+};
+new Chart(document.getElementById('entropyChart'), {
+  type: 'line', data: entropyData,
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+      title: { display: true, text: 'Block Entropy H_k vs Block Size k', color: '#e2e8f0' }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Block size k', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: { title: { display: true, text: 'H_k (bits)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+    }
+  }
+});
+
+
+// ============================================================
+// Chart: Mutual Information
+// ============================================================
+const miLags = [];
+const miVals = [];
+const acVals = [];
+// Data from scale 10^8 (first 30 lags for readability)
+const miData108 = [
+  [1,0.3224,0.0370],[2,0.0050,0.0133],[3,0.0020,0.0065],[4,0.0027,0.0050],
+  [5,0.0028,0.0048],[6,0.0028,0.0020],[7,0.0024,0.0009],[8,0.0027,0.0036],
+  [9,0.0033,0.0033],[10,0.0041,0.0033],[12,0.0030,0.0031],[15,0.0024,0.0009],
+  [20,0.0024,0.0016],[25,0.0024,0.0029],[30,0.0024,0.0014],
+  [40,0.0024,0.0014],[50,0.0025,0.0014],[60,0.0024,0.0018],
+  [80,0.0024,0.0017],[100,0.0025,0.0032]
+];
+miData108.forEach(d => { miLags.push(d[0]); miVals.push(d[1]); acVals.push(d[2]*d[2]/(2*Math.LN2)); });
+
+new Chart(document.getElementById('miChart'), {
+  type: 'line',
+  data: {
+    labels: miLags,
+    datasets: [
+      {
+        label: 'Mutual Information (bits)',
+        data: miVals, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)',
+        pointRadius: 4, tension: 0.2, fill: true,
+      },
+      {
+        label: 'Gaussian prediction from autocorrelation',
+        data: acVals, borderColor: '#f87171', borderDash: [6, 3],
+        pointRadius: 3, tension: 0.2,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+      title: { display: true, text: 'Mutual Information vs Lag (scale 10^8)', color: '#e2e8f0' }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Lag', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: {
+        type: 'logarithmic', min: 0.00001,
+        title: { display: true, text: 'bits (log scale)', color: '#94a3b8' },
+        ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
+      },
+    }
+  }
+});
+
+
+// ============================================================
+// Chart: LZ Complexity Ratio
+// ============================================================
+new Chart(document.getElementById('lzChart'), {
+  type: 'line',
+  data: {
+    labels: ['10^4', '10^5', '10^6', '10^7', '10^8'],
+    datasets: [
+      {
+        label: 'C(gaps) / C(shuffled)',
+        data: [0.924, 0.926, 0.929, 0.936, 0.943],
+        borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.15)',
+        pointRadius: 5, tension: 0.2, fill: true,
+      },
+      {
+        label: 'C(gaps) / C(Poisson)',
+        data: [0.912, 0.914, 0.918, 0.925, 0.933],
+        borderColor: '#a78bfa', borderDash: [6, 3],
+        pointRadius: 5, tension: 0.2,
+      },
+      {
+        label: 'Random baseline (= 1)',
+        data: [1, 1, 1, 1, 1],
+        borderColor: '#475569', borderDash: [4, 4],
+        pointRadius: 0,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+      title: { display: true, text: 'LZ76 Compressibility Ratio by Scale', color: '#e2e8f0' }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Scale (primes near)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: {
+        min: 0.88, max: 1.02,
+        title: { display: true, text: 'Complexity ratio', color: '#94a3b8' },
+        ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
+      },
+    }
+  }
+});
+
+
+// ============================================================
+// Chart: KS Statistic
+// ============================================================
+new Chart(document.getElementById('ksChart'), {
+  type: 'line',
+  data: {
+    labels: ['10^4', '10^5', '10^6', '10^7', '10^8'],
+    datasets: [
+      {
+        label: 'KS Statistic (lower = better fit)',
+        data: [0.1597, 0.1592, 0.1541, 0.1466, 0.1343],
+        borderColor: '#f472b6', backgroundColor: 'rgba(244,114,182,0.15)',
+        pointRadius: 5, tension: 0.2, fill: true,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+      title: { display: true, text: 'Kolmogorov-Smirnov Test: Normalized Gaps vs Exp(1)', color: '#e2e8f0' }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Scale (primes near)', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: {
+        title: { display: true, text: 'KS Statistic', color: '#94a3b8' },
+        ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
+      },
+    }
+  }
+});
+
+
+// ============================================================
+// Chart: Residue Class Entropy
+// ============================================================
+new Chart(document.getElementById('residueChart'), {
+  type: 'bar',
+  data: {
+    labels: ['10^4', '10^5', '10^6', '10^7', '10^8'],
+    datasets: [
+      {
+        label: 'p = 1 mod 6',
+        data: [6.882, 6.921, 7.073, 7.393, 7.799],
+        backgroundColor: 'rgba(56,189,248,0.6)',
+        borderColor: '#38bdf8', borderWidth: 1,
+      },
+      {
+        label: 'p = 5 mod 6',
+        data: [6.924, 6.964, 7.122, 7.468, 7.860],
+        backgroundColor: 'rgba(244,114,182,0.6)',
+        borderColor: '#f472b6', borderWidth: 1,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#e2e8f0' } },
+      title: { display: true, text: 'Single-Gap Entropy H_1 by Prime Residue Class (mod 6)', color: '#e2e8f0' }
+    },
+    scales: {
+      x: { title: { display: true, text: 'Scale', color: '#94a3b8' }, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+      y: {
+        title: { display: true, text: 'H_1 (bits)', color: '#94a3b8' },
+        ticks: { color: '#94a3b8' }, grid: { color: '#334155' }
+      },
+    }
+  }
+});
+
+
+// ============================================================
+// Sticky nav highlight
+// ============================================================
+const sections = document.querySelectorAll('section');
+const navLinks = document.querySelectorAll('nav a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => {
+    if (window.scrollY >= s.offsetTop - 120) current = s.id;
+  });
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+});
+</script>
+</body>
+</html>

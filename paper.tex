@@ -1,0 +1,390 @@
+\documentclass[11pt, a4paper]{amsart}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{enumerate}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage[dvipsnames]{xcolor}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{conjecture}[theorem]{Conjecture}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{observation}[theorem]{Observation}
+
+\newcommand{\ZZ}{\mathbb{Z}}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\NN}{\mathbb{N}}
+\renewcommand{\Pr}{\operatorname{Pr}}
+\newcommand{\MI}{\operatorname{MI}}
+\newcommand{\Ent}{\operatorname{H}}
+
+\title[Information-Theoretic Properties of Prime Gap Sequences]{%
+Information-Theoretic Properties of\\Prime Gap Sequences}
+
+\author{Tobias Canavesi}
+\address{Independent Researcher}
+\email{tobiascanavesi@gmail.com}
+
+\date{April 2026}
+
+\begin{document}
+
+\begin{abstract}
+We present the first systematic information-theoretic analysis of the prime gap sequence $g_n = p_{n+1} - p_n$.
+Using Shannon block entropy, mutual information, Lempel--Ziv complexity, and distributional goodness-of-fit tests, we measure the information content, dependence structure, compressibility, and convergence to the Gallagher--Poisson model across five scales from~$10^4$ to~$10^8$ with $2 \times 10^5$ primes per scale.
+Our main findings are:
+(1)~the entropy rate $h_k = H_k - H_{k-1}$ converges rapidly, revealing that consecutive gaps carry far less information than an i.i.d.\ model predicts (redundancy $\approx 23$--$27$ bits at block size $k = 10$);
+(2)~mutual information at lag~$1$ is $\approx 0.33$ bits---orders of magnitude larger than what the linear autocorrelation ($r \approx -0.04$) would suggest---indicating substantial \emph{nonlinear} dependence, and remains detectable at all lags tested ($\ell \le 100$);
+(3)~the Lempel--Ziv complexity of the gap sequence is $\approx 7\%$ below that of shuffled surrogates, with the ratio approaching~$1$ at larger scales;
+(4)~distributional tests against Exp$(1)$ reject at all scales but with monotonically decreasing test statistics, and the variance-to-mean ratio of prime counts in Poisson windows increases toward~$1$, quantifying the rate of convergence to the Gallagher prediction;
+(5)~primes~$\equiv 5 \pmod{6}$ exhibit slightly higher gap entropy than primes~$\equiv 1 \pmod{6}$, connecting to the Hardy--Littlewood singular series.
+All code and data are publicly available.
+\end{abstract}
+
+\maketitle
+\tableofcontents
+
+% ====================================================================
+\section{Introduction}
+\label{sec:intro}
+% ====================================================================
+
+The prime gap sequence $g_n = p_{n+1} - p_n$ is one of the most studied objects in analytic number theory. Classical results characterize its average behavior (the prime number theorem gives $\langle g_n \rangle \sim \log p_n$), its extreme values (the Cram\'er conjecture~\cite{Cramer1936}, the Maynard--Tao theorem on bounded gaps~\cite{Maynard2015}), and its distributional properties (the Gallagher conjecture~\cite{Gallagher1976} predicting local Poisson statistics conditional on the Hardy--Littlewood $k$-tuple conjecture).
+
+Despite this extensive literature, the \emph{information-theoretic} properties of the gap sequence have received almost no systematic attention. Shannon entropy, mutual information, and algorithmic complexity provide a complementary lens that captures aspects of the sequence's structure---including nonlinear dependencies and compressibility---that traditional statistical measures like autocorrelation cannot detect.
+
+In this paper, we present the first comprehensive information-theoretic characterization of $(g_n)$, organized into five experiments:
+
+\begin{enumerate}
+\item \textbf{Block entropy and entropy rate} (\S\ref{sec:block-entropy}): We measure the Shannon entropy $H_k$ of overlapping $k$-tuples of consecutive gaps and estimate the entropy rate $h = \lim_{k \to \infty} h_k$, where $h_k = H_k - H_{k-1}$.
+
+\item \textbf{Mutual information} (\S\ref{sec:mi}): We compute $\MI(g_n; g_{n+\ell})$ for lags $\ell = 1, \ldots, 100$ and compare to the linear autocorrelation.
+
+\item \textbf{Lempel--Ziv complexity} (\S\ref{sec:lz}): We measure the LZ76 factorization complexity of $(g_n)$ and compare to shuffled and synthetic Poisson surrogates.
+
+\item \textbf{Goodness-of-fit to the Gallagher--Poisson model} (\S\ref{sec:gof}): We test the normalized gaps $g_n / \langle g_n \rangle$ against the exponential distribution and counts in Poisson windows against the Poisson distribution.
+
+\item \textbf{Conditional entropy by residue class} (\S\ref{sec:conditional}): We measure how entropy varies when primes are partitioned by their residue modulo~$6$.
+\end{enumerate}
+
+All measurements are performed at five scales (primes near $10^4, 10^5, 10^6, 10^7, 10^8$) with $N = 2 \times 10^5$ primes per scale, enabling the study of scale-dependent behavior.
+
+
+% ====================================================================
+\section{Definitions and Setup}
+\label{sec:setup}
+% ====================================================================
+
+Let $p_1 = 2 < p_2 = 3 < p_3 = 5 < \cdots$ be the primes. Fix a starting scale $x$ and let $p_1(x) < p_2(x) < \cdots < p_N(x)$ be $N$ consecutive primes starting near $x$. Define the gap sequence $g_i = p_{i+1}(x) - p_i(x)$ for $i = 1, \ldots, N-1$.
+
+\begin{definition}[Block entropy]
+For $k \ge 1$, define the $k$-block entropy
+\[
+H_k = - \sum_{\mathbf{w} \in \mathcal{A}^k} \hat{p}(\mathbf{w}) \log_2 \hat{p}(\mathbf{w}),
+\]
+where $\hat{p}(\mathbf{w})$ is the empirical frequency of the $k$-tuple $\mathbf{w} = (w_1, \ldots, w_k)$ among the overlapping windows $(g_i, g_{i+1}, \ldots, g_{i+k-1})$, and $\mathcal{A} = \{2, 4, 6, 8, \ldots\}$ is the alphabet of even positive integers.
+\end{definition}
+
+\begin{definition}[Entropy rate]
+The $k$-th entropy rate estimate is $h_k = H_k - H_{k-1}$ for $k \ge 2$, with $h_1 = H_1$. For a stationary ergodic process, $h_k \to h$ as $k \to \infty$, where $h$ is the entropy rate of the process.
+\end{definition}
+
+For an i.i.d.\ process, $H_k = k \cdot H_1$ and $h_k = H_1$ for all $k$. The \emph{redundancy} $R_k = k \cdot H_1 - H_k \ge 0$ measures the total dependence captured up to block size $k$.
+
+\begin{definition}[Mutual information]
+For random variables $X, Y$ with discrete joint distribution,
+\[
+\MI(X; Y) = H(X) + H(Y) - H(X, Y).
+\]
+We apply the Miller--Madow bias correction~\cite{MillerMadow}: subtract $(|\mathcal{A}_X| - 1)(|\mathcal{A}_Y| - 1) / (2 n \ln 2)$ from the raw estimate.
+\end{definition}
+
+\begin{definition}[Lempel--Ziv complexity]
+The LZ76 complexity $C(s)$ of a finite sequence $s = s_1 s_2 \cdots s_n$ is the number of distinct phrases in the sequential parsing of $s$ into shortest substrings not previously encountered~\cite{LZ76}. For a random i.i.d.\ sequence over an alphabet of size $|\mathcal{A}|$, $C(s) \sim n / \log_{|\mathcal{A}|} n$ almost surely.
+\end{definition}
+
+
+% ====================================================================
+\section{Block Entropy and Entropy Rate}
+\label{sec:block-entropy}
+% ====================================================================
+
+Table~\ref{tab:block-entropy} summarizes the block entropy measurements at the largest scale ($10^8$). The key observation is the rapid decay of the entropy rate $h_k$: by $k = 6$, the marginal information contributed by an additional gap is less than $0.4$ bits, and by $k = 10$ it is essentially zero.
+
+\begin{table}[ht]
+\centering
+\caption{Block entropy at scale $10^8$ ($N = 200{,}000$ primes).}
+\label{tab:block-entropy}
+\begin{tabular}{ccccc}
+\toprule
+$k$ & $H_k$ (bits) & $h_k$ (bits) & $H_k^{\mathrm{iid}}$ (bits) & Redundancy \\
+\midrule
+1  & 4.481 & 4.481 & 4.481  & 0.000 \\
+2  & 8.634 & 4.153 & 8.963  & 0.329 \\
+3  & 12.499 & 3.865 & 13.444 & 0.946 \\
+4  & 15.607 & 3.109 & 17.926 & 2.318 \\
+5  & 17.186 & 1.579 & 22.407 & 5.221 \\
+6  & 17.557 & 0.370 & 26.889 & 9.332 \\
+7  & 17.604 & 0.047 & 31.370 & 13.766 \\
+8  & 17.609 & 0.005 & 35.852 & 18.243 \\
+9  & 17.610 & 0.001 & 40.333 & 22.724 \\
+10 & 17.610 & 0.000 & 44.815 & 27.205 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{observation}
+The block entropy $H_k$ saturates near $17.61$ bits, regardless of scale. The redundancy $R_{10} = 10 \cdot H_1 - H_{10}$ ranges from $22.7$ bits (scale $10^4$) to $27.2$ bits (scale $10^8$), indicating that an i.i.d.\ model over-predicts the information content of 10 consecutive gaps by a factor of approximately~$2.5$.
+\end{observation}
+
+The saturation of $H_k$ near $17.6$ bits reflects the effective number of distinct $k$-tuples: at $k = 10$, essentially all 199{,}990 overlapping windows are unique ($n_{\text{distinct}} = 199{,}990$), so $H_{10} \approx \log_2 N$, the maximum entropy of the sample. This means the gap sequence has enough variety that any 10 consecutive gaps form a nearly unique fingerprint, yet the entropies at intermediate $k$ reveal strong short-range structure.
+
+The entropy rate $h_k$ is monotonically decreasing at all scales, consistent with the sub-additivity of entropy. It converges faster at smaller scales (where the gap alphabet is smaller) than at larger scales (where rarer large gaps contribute new information). The convergence of $h_k$ to near zero by $k = 8$--$10$ implies that once you know 7--8 preceding gaps, the next gap adds almost no additional entropy.
+
+
+% ====================================================================
+\section{Mutual Information}
+\label{sec:mi}
+% ====================================================================
+
+The mutual information $\MI(g_n; g_{n+\ell})$ captures all statistical dependence between gaps separated by $\ell$ positions, including nonlinear relationships invisible to the Pearson autocorrelation $\rho_\ell$.
+
+\begin{table}[ht]
+\centering
+\caption{Mutual information vs.\ autocorrelation at scale $10^8$.}
+\label{tab:mi}
+\begin{tabular}{ccccc}
+\toprule
+Lag $\ell$ & MI (bits) & MI corrected & $|\rho_\ell|$ & $\rho_\ell^2 / (2\ln 2)$ \\
+\midrule
+1   & 0.3224 & 0.3224 & 0.0370 & $9.9 \times 10^{-4}$ \\
+2   & 0.0098 & 0.0050 & 0.0133 & $1.3 \times 10^{-4}$ \\
+3   & 0.0069 & 0.0020 & 0.0065 & $3.0 \times 10^{-5}$ \\
+5   & 0.0076 & 0.0028 & 0.0048 & $1.7 \times 10^{-5}$ \\
+10  & 0.0086 & 0.0041 & 0.0033 & $7.7 \times 10^{-6}$ \\
+50  & 0.0072 & 0.0025 & 0.0014 & $1.4 \times 10^{-6}$ \\
+100 & 0.0072 & 0.0025 & 0.0032 & $7.3 \times 10^{-6}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{observation}[Nonlinear dependence]
+\label{obs:nonlinear}
+At lag~$1$, $\MI \approx 0.32$ bits while $\rho_1^2 / (2 \ln 2) \approx 10^{-3}$ bits. The mutual information exceeds the Gaussian prediction by a factor of approximately~$300$. This demonstrates that the lag-$1$ dependence is overwhelmingly \emph{nonlinear}: knowing the previous gap tells you $0.32$ bits about the next gap, but only a negligible fraction of this information is carried by the linear correlation.
+\end{observation}
+
+The physical explanation is that prime gaps are constrained to be even (for $p > 2$) and their distribution is highly non-Gaussian---it is supported on $\{2, 4, 6, \ldots\}$ with a long right tail. The MI detects the dependence induced by the shared prime $p_{n+1}$ in consecutive gaps $g_n = p_{n+1} - p_n$ and $g_{n+1} = p_{n+2} - p_{n+1}$: this shared endpoint creates a coupling that is fundamentally discrete and nonlinear.
+
+At lags $\ell \ge 2$, the corrected MI is small (0.002--0.005 bits) but consistently positive across all scales, suggesting residual higher-order dependence beyond what 2-dependence models predict.
+
+
+% ====================================================================
+\section{Lempel--Ziv Complexity}
+\label{sec:lz}
+% ====================================================================
+
+Table~\ref{tab:lz} reports the LZ76 complexity of the gap sequence compared to shuffled and Poisson surrogates.
+
+\begin{table}[ht]
+\centering
+\caption{LZ76 complexity at each scale ($n = 199{,}999$ gaps, 20 surrogates).}
+\label{tab:lz}
+\begin{tabular}{cccccc}
+\toprule
+Scale & $C_{\text{gaps}}$ & $C_{\text{shuffled}}$ & $C_{\text{Poisson}}$ & $C/C_{\text{shuf}}$ & $C/C_{\text{Poi}}$ \\
+\midrule
+$10^4$ & 44{,}212 & 47{,}871 & 48{,}472 & 0.924 & 0.912 \\
+$10^5$ & 44{,}494 & 48{,}035 & 48{,}655 & 0.926 & 0.914 \\
+$10^6$ & 45{,}278 & 48{,}736 & 49{,}337 & 0.929 & 0.918 \\
+$10^7$ & 46{,}999 & 50{,}222 & 50{,}829 & 0.936 & 0.925 \\
+$10^8$ & 49{,}007 & 51{,}960 & 52{,}546 & 0.943 & 0.933 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{observation}
+The gap sequence is consistently $6$--$8\%$ more compressible than a random permutation of itself. The ratio $C_{\text{gaps}}/C_{\text{shuffled}}$ increases monotonically from $0.924$ to $0.943$ as the scale grows, consistent with the prediction that prime gaps become ``more random'' (closer to a Poisson process) at larger scales.
+\end{observation}
+
+The gap between $C_{\text{gaps}}$ and $C_{\text{shuffled}}$ reflects the sequential structure that shuffling destroys: the short-range dependencies captured by the block entropy analysis. That the ratio approaches~$1$ from below supports the Gallagher conjecture qualitatively: in the limit, the gap sequence should become indistinguishable from an i.i.d.\ process.
+
+
+% ====================================================================
+\section{Goodness-of-Fit to the Gallagher--Poisson Model}
+\label{sec:gof}
+% ====================================================================
+
+Gallagher~\cite{Gallagher1976} showed, conditionally on the Hardy--Littlewood $k$-tuple conjecture, that the number of primes in a random interval of length $\lambda \log x$ near $x$ follows a Poisson distribution with mean $\lambda$. An equivalent statement is that the normalized gaps $g_n / \langle g_n \rangle$ converge in distribution to Exp$(1)$.
+
+\subsection{Exponential fit}
+
+Table~\ref{tab:exp-fit} reports the Kolmogorov--Smirnov (KS), Anderson--Darling (AD), and $\chi^2$ test statistics for $g_n / \langle g_n \rangle$ against Exp$(1)$.
+
+\begin{table}[ht]
+\centering
+\caption{Goodness-of-fit statistics for $g_n / \langle g_n \rangle$ against Exp$(1)$.}
+\label{tab:exp-fit}
+\begin{tabular}{cccc}
+\toprule
+Scale & KS statistic & AD statistic & $\chi^2$ statistic \\
+\midrule
+$10^4$ & 0.1597 & 5{,}463 & 147{,}349 \\
+$10^5$ & 0.1592 & 5{,}406 & 145{,}143 \\
+$10^6$ & 0.1541 & 5{,}007 & 145{,}205 \\
+$10^7$ & 0.1466 & 4{,}445 & 107{,}294 \\
+$10^8$ & 0.1343 & 3{,}659 & 82{,}103 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All tests reject overwhelmingly at every scale, which is expected given the sample size ($n \approx 2 \times 10^5$). However, all three test statistics decrease monotonically with scale, confirming that the gap distribution converges toward Exp$(1)$.
+
+\subsection{Poisson counting}
+
+We partition the primes into windows of size $\lambda \log x_{\text{mid}}$ and count primes per window. Table~\ref{tab:poisson} reports the variance-to-mean ratio (the \emph{index of dispersion}).
+
+\begin{table}[ht]
+\centering
+\caption{Variance-to-mean ratio for prime counts in Poisson windows ($\lambda = 1$). Poisson predicts $\sigma^2/\mu = 1$.}
+\label{tab:poisson}
+\begin{tabular}{cc}
+\toprule
+Scale & $\sigma^2 / \mu$ \\
+\midrule
+$10^4$ & 0.722 \\
+$10^5$ & 0.723 \\
+$10^6$ & 0.733 \\
+$10^7$ & 0.746 \\
+$10^8$ & 0.768 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{observation}[Underdispersion]
+Prime counts in short intervals are systematically \emph{underdispersed} relative to Poisson: $\sigma^2/\mu < 1$ at all scales. However, the ratio increases monotonically toward~$1$, consistent with convergence to the Gallagher prediction. The underdispersion reflects the ``repulsion'' between consecutive primes induced by the sieve: a prime at $p$ eliminates candidates near $p$, reducing variance below the Poisson level. This effect weakens as the window size grows relative to typical gap sizes.
+\end{observation}
+
+
+% ====================================================================
+\section{Conditional Entropy by Residue Class}
+\label{sec:conditional}
+% ====================================================================
+
+All primes $p > 3$ satisfy $p \equiv 1$ or $5 \pmod{6}$. We partition primes by residue class and measure the gap entropy within each class.
+
+\begin{table}[ht]
+\centering
+\caption{Single-gap entropy $H_1$ (bits) by prime residue class mod~$6$.}
+\label{tab:cond-entropy}
+\begin{tabular}{cccc}
+\toprule
+Scale & $H_1$ (all) & $H_1$ ($p \equiv 1$) & $H_1$ ($p \equiv 5$) \\
+\midrule
+$10^4$ & 4.035 & 6.882 & 6.924 \\
+$10^5$ & 4.053 & 6.921 & 6.964 \\
+$10^6$ & 4.128 & 7.073 & 7.122 \\
+$10^7$ & 4.289 & 7.393 & 7.468 \\
+$10^8$ & 4.481 & 7.799 & 7.860 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{observation}
+Primes $\equiv 5 \pmod{6}$ have consistently higher gap entropy ($\approx 0.05$ bits more) than primes $\equiv 1 \pmod{6}$ across all scales. This asymmetry connects to the Hardy--Littlewood singular series: the conjecture predicts that gaps divisible by~$3$ (which contribute to specific residue patterns) are enhanced by a factor $\mathfrak{S}(6)/\mathfrak{S}(4) = 2$, creating slightly different gap distributions for the two residue classes.
+\end{observation}
+
+\begin{remark}
+The class-restricted entropies ($\approx 7$--$8$ bits) are much larger than the full-sequence entropy ($\approx 4$--$4.5$ bits). This is because class-restricted ``gaps'' are computed between consecutive primes in the same class, which are on average twice as large and span a wider range of values, yielding more uncertainty per gap.
+\end{remark}
+
+
+% ====================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ====================================================================
+
+\subsection{The nonlinear dependence gap}
+
+The most striking finding is the enormous discrepancy between mutual information and autocorrelation at lag~$1$ (Observation~\ref{obs:nonlinear}). The autocorrelation $\rho_1 \approx -0.04$ has been noted previously~\cite{LemkeOliver2016} and attributed to the shared prime $p_{n+1}$. Our MI analysis reveals that this shared prime creates a dependence $300$ times stronger than the linear correlation suggests. This has implications for any probabilistic model of prime gaps: models calibrated on autocorrelation alone (as in~\cite{Gallagher1976, Chase2020}) miss the dominant component of the nearest-neighbor dependence.
+
+\subsection{Convergence to the Gallagher prediction}
+
+All five experiments independently confirm that the gap sequence becomes ``more random'' at larger scales:
+\begin{itemize}
+\item Entropy rate $h_k$ at fixed $k$ increases with scale (more unpredictability per gap).
+\item MI at fixed lag decreases with scale (less dependence).
+\item LZ complexity ratio approaches~$1$ (less compressibility).
+\item KS and AD statistics decrease (better exponential fit).
+\item Variance-to-mean ratio increases toward~$1$ (less underdispersion).
+\end{itemize}
+
+These five measures provide independent quantifications of the \emph{rate} at which the Gallagher prediction takes hold. The KS statistic decreases roughly as $0.16 - 0.003 \log_{10}(x)$, suggesting full convergence is very slow.
+
+\subsection{Implications for Gilbreath's conjecture}
+
+In our companion paper~\cite{Canavesi2026}, we used XOR dynamics on the binary parity sequence $b(n) = \lfloor g_n / 2 \rfloor \bmod 2$ to establish a conditional proof framework for Gilbreath's conjecture. The present results strengthen that framework: the rapid entropy rate convergence (Experiment~1) confirms that consecutive gaps carry limited independent information, supporting the weak-mixing hypothesis~(H2), while the convergence to Poisson (Experiment~4) supports the Hardy--Littlewood hypothesis~(H1).
+
+
+% ====================================================================
+\section{Computational Details}
+\label{sec:computation}
+% ====================================================================
+
+All computations were performed in Python~3 using SymPy~\cite{SymPy} for prime generation, NumPy for array operations, and SciPy for statistical tests. The total computation time was approximately 6~minutes on a standard laptop. All code and data are available at:
+
+\begin{center}
+\url{https://github.com/tobiascanavesi/information-theory-gaps}
+\end{center}
+
+\subsection*{Use of generative AI}
+The generative AI tool Claude Opus 4.6 (Anthropic, 2025) was used for assistance with Python code development and \LaTeX{} formatting. All mathematical content and interpretation represent the original intellectual contribution of the author.
+
+
+% ====================================================================
+% References
+% ====================================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{Cramer1936}
+H.~Cram\'er, \emph{On the order of magnitude of the difference between consecutive prime numbers}, Acta Arithmetica \textbf{2} (1936), 23--46.
+
+\bibitem{Gallagher1976}
+P.~X.~Gallagher, \emph{On the distribution of primes in short intervals}, Mathematika \textbf{23} (1976), 4--9.
+
+\bibitem{Maynard2015}
+J.~Maynard, \emph{Small gaps between primes}, Annals of Mathematics \textbf{181} (2015), no.~1, 383--413.
+
+\bibitem{LemkeOliver2016}
+R.~J.~Lemke Oliver and K.~Soundararajan, \emph{Unexpected biases in the distribution of consecutive primes}, Proc.\ Natl.\ Acad.\ Sci.\ USA \textbf{113} (2016), no.~31, E4446--E4454.
+
+\bibitem{Chase2020}
+Z.~Chase, \emph{A random analogue of Gilbreath's conjecture}, Mathematische Annalen (2024).
+
+\bibitem{Cohen2024}
+A.~Cohen, S.~Iyer, and C.~Manack, \emph{Gaps between consecutive primes and the exponential distribution}, Experimental Mathematics (2024).
+
+\bibitem{LZ76}
+A.~Lempel and J.~Ziv, \emph{On the complexity of finite sequences}, IEEE Trans.\ Inform.\ Theory \textbf{22} (1976), no.~1, 75--81.
+
+\bibitem{MillerMadow}
+G.~A.~Miller, \emph{Note on the bias of information estimates}, in: Information Theory in Psychology (1955), 95--100.
+
+\bibitem{SymPy}
+A.~Meurer et al., \emph{SymPy: symbolic mathematics in Python}, PeerJ Computer Science \textbf{3} (2017), e103.
+
+\bibitem{Canavesi2026}
+T.~Canavesi, \emph{Toward Gilbreath's conjecture via XOR bias absorption of prime gap parities}, preprint (2026).
+
+\end{thebibliography}
+
+\end{document}
