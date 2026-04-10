@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from collections import Counter
 from math import log2, log, e as EULER_E
-from sympy import nextprime
+from sympy import nextprime, factorint
 from scipy.stats import kstest, anderson, chisquare, expon, poisson
 
 # ---------------------------------------------------------------------------
@@ -630,73 +630,85 @@ for scale in SCALES:
     # The joint P(g_n=2j, g_{n+1}=2k) involves the 3-tuple singular series
     # S({0, 2j, 2j+2k}).
     #
-    # Compute the singular series S({0,h}) for the marginal distribution
+    # Precompute small primes for singular series (up to 500 covers all gaps).
+    _small_primes = [p for p in range(3, 500)
+                     if all(p % d != 0 for d in range(2, int(p**0.5) + 1))]
+
     def singular_series_pair(h):
-        """S({0,h}) = 2 * C2 * prod_{p|h, p>2} (p-1)/(p-2), but we compute
-        the relative weight S({0,h})/S({0,2}) since C2 cancels in the ratio."""
+        """S({0,h}) relative weight: prod_{p|h, p>2} (p-1)/(p-2).
+        Uses sympy factorint for exact factorization."""
         if h <= 0 or h % 2 != 0:
             return 0.0
         product = 1.0
-        # Factor out the contribution from odd prime divisors of h
-        n = h
-        for p in [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]:
-            if p * p > n:
-                break
-            if n % p == 0:
+        for p in factorint(h):
+            if p > 2:
                 product *= (p - 1) / (p - 2)
-                while n % p == 0:
-                    n //= p
-        if n > 2:  # remaining prime factor
-            product *= (n - 1) / (n - 2)
         return product
 
     def singular_series_triple(h1, h2):
-        """Relative weight for S({0, h1, h2}) / S({0,2})^2.
-        S({0,h1,h2}) = product over primes p of (1 - nu_p/p)/(1-1/p)^3
-        where nu_p = number of distinct residues of {0,h1,h2} mod p.
-        We compute the relative factor vs the pair case."""
+        """S({0,h1,h2}) relative weight (same normalization as pair^2).
+        Product over primes p of local density factor for 3-tuple.
+        For admissibility: need nu_p < p for all p.
+        We compute prod_{p} f_3(p) / f_2(p)^2 where
+          f_k(p) = (1 - nu_p/p) / (1-1/p)^k
+        is the local factor for a k-tuple with nu_p distinct residues mod p.
+        The ratio f_3(p)/f_2(p)^2 simplifies to:
+          (1 - nu3/p)(1 - 1/p) / [(1 - nu_h1/p)(1 - nu_h2/p)]
+        where nu3 = |{0,h1,h2} mod p|, nu_h1 = |{0,h1} mod p|, etc."""
         if h1 <= 0 or h2 <= 0 or h1 % 2 != 0 or h2 % 2 != 0 or h1 == h2:
             return 0.0
         product = 1.0
-        for p in [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]:
-            # Count distinct residues of {0, h1, h2} mod p
-            residues = len(set([0 % p, h1 % p, h2 % p]))
-            # For the 3-tuple: factor is (1 - residues/p) / (1 - 1/p)^3
-            # For the reference (independent pairs): (1 - 2/p)^2 / (1 - 1/p)^4
-            # Ratio: (1 - residues/p)(1-1/p) / (1-2/p)^2
-            num = (1.0 - residues / p) * (1.0 - 1.0 / p)
-            den = (1.0 - 2.0 / p) ** 2
-            if den > 0:
+        for p in _small_primes:
+            if p > max(h1, h2):
+                break
+            residues_3 = len({0 % p, h1 % p, h2 % p})
+            if residues_3 >= p:
+                return 0.0  # not admissible
+            residues_h1 = len({0 % p, h1 % p})
+            residues_h2 = len({0 % p, h2 % p})
+            num = (1.0 - residues_3 / p) * (1.0 - 1.0 / p)
+            den = (1.0 - residues_h1 / p) * (1.0 - residues_h2 / p)
+            if den > 0 and num >= 0:
                 product *= num / den
+            elif num == 0:
+                return 0.0
         return product
 
-    # Build the H-L marginal distribution P(g=2k) ~ S_pair(2k) * exp(-2k/L)
-    max_gap_val = int(min(8 * L, 300))  # truncate at ~8 mean gaps
+    # Build marginal P(g=h) ~ S_pair(h) * exp(-h/L)
+    max_gap_val = int(min(8 * L, 300))
     gap_values = list(range(2, max_gap_val + 1, 2))
 
-    marginal_weights = {}
-    for g in gap_values:
-        w = singular_series_pair(g) * np.exp(-g / L)
-        marginal_weights[g] = w
-    Z_marginal = sum(marginal_weights.values())
-    marginal_probs = {g: w / Z_marginal for g, w in marginal_weights.items()}
-
-    # H-L marginal entropy
+    marginal_weights = {g: singular_series_pair(g) * np.exp(-g / L)
+                        for g in gap_values}
+    Z_m = sum(marginal_weights.values())
+    marginal_probs = {g: w / Z_m for g, w in marginal_weights.items()}
     H_hl_marginal = -sum(p * log2(p) for p in marginal_probs.values() if p > 0)
 
-    # Build joint distribution P(g1=2j, g2=2k) ~ S_triple(2j, 2j+2k) * exp(-(2j+2k)/L)
+    # Build joint P(g1, g2) ~ S_pair(g1)*S_pair(g2)*coupling(g1,g1+g2)*exp(-(g1+g2)/L)
+    # The coupling factor captures the non-independence from the triple singular series.
     joint_weights = {}
     for g1 in gap_values:
+        sp1 = marginal_weights[g1]  # already includes S_pair and exponential
         for g2 in gap_values:
-            w = singular_series_triple(g1, g1 + g2) * np.exp(-(g1 + g2) / L)
+            sp2 = marginal_weights[g2]
+            coupling = singular_series_triple(g1, g1 + g2)
+            w = sp1 * sp2 * coupling
             if w > 0:
                 joint_weights[(g1, g2)] = w
-    Z_joint = sum(joint_weights.values())
+    Z_j = sum(joint_weights.values())
 
-    if Z_joint > 0:
-        joint_probs = {k: w / Z_joint for k, w in joint_weights.items()}
+    if Z_j > 0:
+        joint_probs = {k: w / Z_j for k, w in joint_weights.items()}
         H_hl_joint = -sum(p * log2(p) for p in joint_probs.values() if p > 0)
-        MI_hl = 2 * H_hl_marginal - H_hl_joint
+        # MI from marginals of the joint (not the standalone marginals)
+        joint_marg1 = {}
+        joint_marg2 = {}
+        for (g1, g2), p in joint_probs.items():
+            joint_marg1[g1] = joint_marg1.get(g1, 0) + p
+            joint_marg2[g2] = joint_marg2.get(g2, 0) + p
+        H_jm1 = -sum(p * log2(p) for p in joint_marg1.values() if p > 0)
+        H_jm2 = -sum(p * log2(p) for p in joint_marg2.values() if p > 0)
+        MI_hl = H_jm1 + H_jm2 - H_hl_joint
     else:
         MI_hl = 0.0
 
@@ -765,7 +777,9 @@ for scale in SCALES:
                    if r['scale'] == scale and r['lag'] == lag][0]
         MI_obs = mi_row['MI_bits']  # raw MI (before correction)
 
-        # Null distribution: shuffle one sequence and compute MI
+        # Null distribution: shuffle g_n (the first variable) while keeping
+        # g_{n+lag} fixed. This tests the null hypothesis of independence
+        # while preserving both marginal distributions.
         null_mi = []
         for _ in range(N_PERMUTATIONS):
             shuffled = gaps_list[:n_pairs].copy()
